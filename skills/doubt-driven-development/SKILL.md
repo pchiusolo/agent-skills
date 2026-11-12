@@ -117,7 +117,7 @@ Under an engagement, spawning the reviewer is an agent-creation request: get the
 
 A single-model reviewer shares blind spots with the original author — a colder, different-architecture model catches them. Doubt-driven is already opt-in for non-trivial decisions, so within that scope offering cross-model is part of the skill's value, not optional friction.
 
-**Under an engagement: the contract decides.** Do not ask about cross-model every cycle. If the contract's provider and model allowlist names a cross-model reviewer, use it (after the Lead's admission) with the invocation recorded in the contract or the engagement record, applying the Step 2 checks below; the recorded invocation stands in for item 3. If the allowlist names none, or the allowed one is unreachable, write *"Cross-model unavailable: <reason>"* in the output and the engagement record, then continue to RECONCILE. Never invoke a provider or model the allowlist does not name.
+**Under an engagement: the contract decides.** Do not ask about cross-model every cycle. If the contract's provider and model allowlist names a cross-model reviewer, use it (after the Lead's admission) applying the Step 2 checks below. That needs a recorded entry in the contract or the engagement record that names the CLI, its exact invocation, and which repository content may be sent to it. That recorded invocation stands in for item 3, and the exact command is re-checked against it before each run. An allowlisted model without such an entry is not authorization to run an external CLI: record *"Cross-model unavailable: no recorded invocation"*. If the allowlist names none, or the allowed one is unreachable, write *"Cross-model unavailable: <reason>"* in the output and the engagement record, then continue to RECONCILE. Never invoke a provider or model the allowlist does not name.
 
 **Interactive sessions without an engagement: always offer. Never silently skip.**
 
@@ -167,7 +167,7 @@ Acknowledge the skip in the output (*"Proceeding with single-model findings only
 **Non-interactive contexts without an engagement** (CI, `/loop`, autonomous-loop, scheduled runs):
 
 - Cross-model is **skipped**, and the skip must be **announced** in the output: *"Cross-model skipped: non-interactive context."*
-- **Never invoke an external CLI without explicit user authorization** — this is a load-bearing safety property. (Under an engagement, an allowlist entry in the accepted contract is that authorization; nothing else is.)
+- **Never invoke an external CLI without explicit user authorization** — this is a load-bearing safety property. (Under an engagement, that authorization is an allowlist entry in the accepted contract together with a recorded invocation naming the CLI, its exact command, and the data it may receive. Nothing else is.)
 
 Cross-model adds cost, latency, and tool fragility. The agent surfaces the choice every interactive cycle; the user (or, under an engagement, the contract) decides whether this artifact warrants it.
 

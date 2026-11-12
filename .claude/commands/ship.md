@@ -71,7 +71,7 @@ Produce a single output:
 
 ## Rules
 
-1. The three Phase A personas run in parallel, each in a fresh context — never as sequential same-context passes. Under an engagement, admitted personas run together and queued ones run as slots free, still in fresh contexts.
+1. The three Phase A personas run in parallel, each in a fresh context. A sequential same-context pass may add checklist coverage, but it is never presented or counted as independent review. Under an engagement, admitted personas run together and queued ones run as slots free, still in fresh contexts.
 2. Personas do not call each other. The main agent merges in Phase B.
 3. The rollback plan is mandatory before any GO decision.
 4. If any persona returns a Critical finding, the default verdict is NO-GO unless the user explicitly accepts the risk (under an engagement, only the owner can, as a recorded decision).

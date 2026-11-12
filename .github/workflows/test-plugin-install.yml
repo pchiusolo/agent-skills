@@ -161,7 +161,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: validate
     steps:
+      # On pull_request, check out the PR head itself (not the merge ref) so the install tests it.
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Install Claude Code
         run: npm install -g @anthropic-ai/claude-code
@@ -179,3 +182,13 @@ jobs:
 
       - name: Install plugin
         run: claude plugin install agent-skills@pchiusolo-agent-skills --scope user
+
+      # Prove the installed copy is this revision, not just that install exited 0.
+      - name: Verify installed revision
+        run: |
+          want=$(node -p "require('./.claude-plugin/plugin.json').version")
+          claude plugin list | tee plugins.txt
+          grep -A3 'agent-skills@pchiusolo-agent-skills' plugins.txt | grep -q "Version: $want"
+          installed=$(find ~/.claude/plugins -path '*agent-skills*' -name autonomous-delivery-contract.md -print -quit)
+          test -n "$installed" || { echo "installed copy lacks references/autonomous-delivery-contract.md"; exit 1; }
+          cmp "$installed" references/autonomous-delivery-contract.md

@@ -130,7 +130,7 @@ A fresh session is safe at a completed task boundary, not at an arbitrary token 
 4. the exact verification commands and outcomes;
 5. unresolved questions, risks, and required approvals.
 
-Commit the completed task only when the user or repository workflow authorizes it. Otherwise, leave the working tree intact and record that the changes are uncommitted.
+Commit the completed task only when the user, the repository workflow, or an accepted engagement contract (its autonomous actions) authorizes it. Otherwise, leave the working tree intact and record that the changes are uncommitted.
 
 In the fresh session, read the rules, spec, plan, task status, and actual `git status` before acting. Re-run verification when its recorded baseline is missing, the code has moved, or the next task depends on it. Do not infer approval from a previous conversation unless the durable artifact records it.
 
