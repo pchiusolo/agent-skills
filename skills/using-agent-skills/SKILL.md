@@ -42,6 +42,12 @@ Task arrives
     └── Deploying/launching? ─────────→ shipping-and-launch
 ```
 
+## Invoking Skills on Each Host
+
+Invocation is host-specific. Name a skill by its `name` and use the mechanism the current host supports: the Skill tool in Claude Code (where a plugin may list it under a namespace such as `agent-skills:` or the namespace of a plugin that vendors this library), `@name` in Codex, the `skill` tool in OpenCode, or the host's own equivalent. Slash syntax such as `/spec` and `/build` belongs to the Claude Code, Gemini CLI, and Antigravity command wrappers; do not assume it exists on another host. Do not preload the whole library or paste this file into always-on context on a host that routes skills from their descriptions.
+
+**Under an engagement** (see `../../references/autonomous-delivery-contract.md`), the Project Lead invokes this skill once per routing decision through the host's supported mechanism, records the route it chose (the skills, in order, and why) in the engagement record, and loads only the skills on that route. Workers receive their route in their brief instead of re-routing.
+
 ## Core Operating Behaviors
 
 These behaviors apply at all times, across all skills. They are non-negotiable.

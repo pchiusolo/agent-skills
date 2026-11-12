@@ -3,7 +3,7 @@ description: Implement tasks incrementally — build, test, verify, commit. Add 
 disable-model-invocation: true
 ---
 
-Invoke the agent-skills:incremental-implementation skill alongside agent-skills:test-driven-development.
+Invoke the `incremental-implementation` skill alongside `test-driven-development`.
 
 ## Modes
 
@@ -45,15 +45,15 @@ Use this once a spec exists and you want to collapse plan + build into one run. 
 
 1. **Require a spec.** Resolve it as in "Resolve the artifacts" above. If none exists, stop and tell the user to run `/spec` first — do not invent requirements.
 2. **Establish a clean baseline.** Run `git status --porcelain`. If there are uncommitted changes outside the expected planning artifacts (the resolved spec, plan, and task files: engagement paths, `CAPABILITY-MAP.md` and `SPEC-<module-id>.md`, or `SPEC.md`, `docs/SPEC.md`, `spec/*`, `tasks/plan.md`, `tasks/todo.md`), stop and ask the user to commit, stash, or confirm how to handle them. Autonomous per-task commits must not absorb unrelated local work, or the clean-rollback guarantee breaks.
-3. **Plan if needed.** If no plan resolves, invoke agent-skills:planning-and-task-breakdown to generate one.
+3. **Plan if needed.** If no plan resolves, invoke `planning-and-task-breakdown` to generate one.
 4. **Single checkpoint.** Present the full plan and wait for an unambiguous affirmative (e.g. "approve", "go", "yes"). Treat hedged responses ("looks reasonable", "I guess") as **not** approved. This is the only human gate — after approval, run autonomously. Under an engagement, only a recorded owner approval of this plan, or a contract clause that authorizes executing it, passes this gate; otherwise record the plan for the owner and stop. If you generated the plan file, commit it as a single preparatory commit now so it doesn't bleed into the first task's commit.
 5. **Execute every task in dependency order.** Use each task's declared dependencies; if they aren't explicit, execute in the order the plan lists them. For each task, run the full default loop above (RED → GREEN → regression → build → commit → mark complete). Stage only the files that task touched plus its task-status update — never `git add -A` blindly — and make one commit per task so any point is a clean rollback.
 6. **Stop and ask the user** (do not push through) when:
-   - a test can't be made to pass or the build breaks without an obvious fix → follow agent-skills:debugging-and-error-recovery
+   - a test can't be made to pass or the build breaks without an obvious fix → follow `debugging-and-error-recovery`
    - the spec is ambiguous, or a task needs a decision the spec doesn't cover
-   - a task is high-risk or irreversible — auth/permission changes, destructive data migrations, payments, deletions, deploys, anything touching secrets, **or anything you can't undo with `git revert`** → follow agent-skills:doubt-driven-development and get explicit sign-off before continuing
+   - a task is high-risk or irreversible — auth/permission changes, destructive data migrations, payments, deletions, deploys, anything touching secrets, **or anything you can't undo with `git revert`** → follow `doubt-driven-development` and get explicit sign-off before continuing
 
    After the user resolves a blocker, they re-invoke `/build auto` — it resumes from the next pending task.
 7. **Summarize at the end:** tasks completed, tests added, commits made, and anything skipped, flagged, or left for the user.
 
-If any step fails, follow the agent-skills:debugging-and-error-recovery skill.
+If any step fails, follow the `debugging-and-error-recovery` skill.

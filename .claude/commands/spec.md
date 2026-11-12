@@ -3,7 +3,7 @@ description: Start spec-driven development — write a structured specification 
 disable-model-invocation: true
 ---
 
-Invoke the agent-skills:spec-driven-development skill.
+Invoke the `spec-driven-development` skill.
 
 Under an engagement (see `references/autonomous-delivery-contract.md`), read the durable engagement record before asking anything: do not re-ask what the contract or a recorded owner answer already settles, and write to the spec location the engagement names. A question only the owner can answer still blocks: record it and stop that line of work, never inventing an answer. Without an engagement, proceed as below.
 

@@ -244,3 +244,40 @@ test('a nested description does not supply a missing command description', () =>
   assert.equal(result.status, 1, result.stdout + result.stderr);
   assert.match(result.stdout, /missing or malformed description/);
 });
+
+// ─── Skill references stay namespace-neutral ────────────────────────────────
+//
+// The plugin namespace in front of a skill name (`agent-skills:` here) changes
+// when another plugin vendors this library, so a wrapper that hardcodes it
+// points at a skill that does not exist there. Bodies name skills bare.
+
+test('a command body that invokes a skill through a plugin namespace is rejected', () => {
+  const root = makeSandbox();
+  writeMatchingCommands(root, 'review', 'Review the change');
+  writeFile(
+    root,
+    path.join('.claude', 'commands', 'review.md'),
+    '---\ndescription: Review the change\n---\n\nInvoke the agent-skills:code-review-and-quality skill.\n',
+  );
+
+  const result = run(root);
+
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stdout, /review/);
+  assert.match(result.stdout, /agent-skills:code-review-and-quality/);
+  assert.match(result.stdout, /namespace/);
+});
+
+test('a command body that names skills bare passes', () => {
+  const root = makeSandbox();
+  writeMatchingCommands(root, 'review', 'Review the change');
+  writeFile(
+    root,
+    path.join('.claude', 'commands', 'review.md'),
+    '---\ndescription: Review the change\n---\n\nInvoke the `code-review-and-quality` skill.\n',
+  );
+
+  const result = run(root);
+
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+});

@@ -46,6 +46,8 @@ If your agent does not route skills natively, start with the `using-agent-skills
 
 If your host already discovers and activates skills from their descriptions, do not also paste `using-agent-skills` into an always-on system prompt or rules file. That creates two routers for the same task. Install the individual skills and let the host activate them on demand instead.
 
+Invocation syntax is host-specific: `/spec` and `agent-skills:<name>` are Claude Code forms, `@name` is Codex, and other hosts use their own skill mechanism. Refer to skills by name and let each host resolve it. An orchestrating Project Lead working under an engagement contract ([references/autonomous-delivery-contract.md](../references/autonomous-delivery-contract.md)) invokes `using-agent-skills` once per routing decision through the host's mechanism and records the route, rather than preloading the library.
+
 ### Existing projects need no migration
 
 Install the pack from the existing project's root using the normal setup path
@@ -170,7 +172,7 @@ This portability gap is tracked in
 
 ## Spec and task artifacts
 
-The `/spec` and `/plan` commands create working artifacts (`SPEC.md`, `tasks/plan.md`, `tasks/todo.md`). Treat them as **living documents** while the work is in progress:
+The `/spec` and `/plan` commands create working artifacts (`SPEC.md`, `tasks/plan.md`, `tasks/todo.md`; for a multi-module initiative, `CAPABILITY-MAP.md` plus one `SPEC-<module-id>.md` per module). Treat them as **living documents** while the work is in progress:
 
 - Keep them in version control during development so the human and the agent have a shared source of truth.
 - Update them when scope or decisions change.

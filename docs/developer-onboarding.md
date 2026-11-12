@@ -20,7 +20,8 @@ The repo has five composable layers. Understanding what each one is *for* preven
 
 Two structural rules worth internalizing early:
 
-- **The user (or a slash command) is the orchestrator.** Personas never invoke other personas; the only endorsed multi-persona pattern is parallel fan-out with a merge step (see [references/orchestration-patterns.md](../references/orchestration-patterns.md)).
+- **The user (or a slash command) is the orchestrator, unless the owner has accepted an engagement contract that authorizes a Project Lead** ([references/autonomous-delivery-contract.md](../references/autonomous-delivery-contract.md)). Personas never invoke other personas; the endorsed multi-persona patterns are parallel fan-out with a merge step and, under an engagement, Lead-admitted dispatch of bounded workers and fresh-context reviewers (see [references/orchestration-patterns.md](../references/orchestration-patterns.md)). Every amendment for engagements is conditional: without one, skills keep their approval stops.
+- **Invocation is host-specific.** Wrappers and skills name other skills bare (`code-review-and-quality`, never `agent-skills:code-review-and-quality`), because the plugin namespace changes when another plugin vendors this library; `validate-commands.js` enforces it.
 - **Don't duplicate, reference.** Skills link to other skills and to `references/` instead of restating content. The same rule applies to docs, including this one.
 
 One scope caveat that trips people up: `AGENTS.md` and `CLAUDE.md` at the repo root configure agents working on *this repo*. They are not reusable assets and setup guides must never tell users to copy them into their own projects; the reusable assets are the skills.

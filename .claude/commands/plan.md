@@ -3,7 +3,7 @@ description: Break work into small verifiable tasks with acceptance criteria and
 disable-model-invocation: true
 ---
 
-Invoke the agent-skills:planning-and-task-breakdown skill.
+Invoke the `planning-and-task-breakdown` skill.
 
 Read the spec and the relevant codebase sections. Resolve the spec in this order: the spec reference an engagement names (see `references/autonomous-delivery-contract.md`); else the module's `SPEC-<module-id>.md`, selected by id through `CAPABILITY-MAP.md`; else SPEC.md or equivalent. Then:
 
