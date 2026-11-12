@@ -91,5 +91,5 @@ When analyzing test coverage:
 ## Composition
 
 - **Invoke directly when:** the user asks for test design, coverage analysis, or a Prove-It test for a specific bug.
-- **Invoke via:** `/ship` (parallel fan-out for coverage gap analysis alongside `code-reviewer` and `security-auditor`). `/test` runs the `test-driven-development` skill in the main session and does not spawn this persona.
-- **Do not invoke from another persona.** Recommendations to add tests belong in your report; the user or a slash command decides when to act on them. See [docs/agents.md](../docs/agents.md).
+- **Invoke via:** `/ship` (parallel fan-out for coverage gap analysis alongside `code-reviewer` and `security-auditor`). `/test` runs the `test-driven-development` skill in the main session and does not spawn this persona. Under an engagement, an authorized Project Lead may also dispatch this persona as a fresh-context reviewer at an exact revision (see [references/autonomous-delivery-contract.md](../references/autonomous-delivery-contract.md)).
+- **Do not invoke from another persona.** Recommendations to add tests belong in your report; the user, a slash command, or an authorized Project Lead decides when to act on them. See [docs/agents.md](../docs/agents.md).

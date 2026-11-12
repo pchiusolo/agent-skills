@@ -19,7 +19,7 @@ Three layers, each with a distinct job:
 | **Persona** | A role with a perspective and an output format | `code-reviewer` | The *who* — adopts a viewpoint, produces a report |
 | **Command** | A user-facing entry point | `/review`, `/ship` | The *when* — composes personas and skills |
 
-The user (or a slash command) is the orchestrator. **Personas do not call other personas.** Skills are mandatory hops inside a persona's workflow.
+The user (or a slash command the user runs) is the orchestrator. The one exception is an explicitly authorized **Project Lead**, whose authority is an engagement contract the owner accepted and recorded in a durable engagement record ([references/autonomous-delivery-contract.md](../references/autonomous-delivery-contract.md)); without that contract there is no Lead. **Personas do not call other personas**, under an engagement or not. Skills are mandatory hops inside a persona's workflow.
 
 ## When to use each
 
@@ -43,7 +43,7 @@ Pick this only when **independent** investigations can run in parallel and produ
 
 - `/ship` → fans out to `code-reviewer` + `security-auditor` + `test-engineer` in parallel, then synthesizes their reports into a go/no-go decision
 
-This is the only orchestration pattern this repo endorses. See [references/orchestration-patterns.md](../references/orchestration-patterns.md) for the full pattern catalog and anti-patterns.
+This is the only fan-out a slash command runs. Under an engagement, the same personas can also be dispatched by the Project Lead as fresh-context reviewers (see below). See [references/orchestration-patterns.md](../references/orchestration-patterns.md) for the full pattern catalog and anti-patterns.
 
 ## Decision matrix
 
@@ -52,8 +52,20 @@ Is the work a single perspective on a single artifact?
 ├── Yes → Direct persona invocation
 └── No  → Are the sub-tasks independent (no shared mutable state, no ordering)?
          ├── Yes → Slash command with parallel fan-out (e.g. /ship)
-         └── No  → Sequential slash commands run by the user (/spec → /plan → /build → /test → /review)
+         └── No  → Sequential slash commands run by the user (/spec → /plan → /build → /test → /review),
+                   or, under an engagement, sequenced by the Project Lead within the contract
 ```
+
+## Under an engagement: the Project Lead
+
+When the owner has accepted an engagement contract, one persistent Project Lead per project may orchestrate:
+
+- It invokes `using-agent-skills` once per routing decision, records the route, and loads only the skills on it.
+- It admits every agent-creation request (a `/ship` fan-out, a `/webperf` audit, a test-writing helper, a doubt-driven reviewer, a worker) against the contract's ownership and capacity limits, and queues the request when no slot is free.
+- It counts only fresh-context reviews at the exact revision as independent; when one cannot run, verification is reported as blocked or incomplete.
+- It keeps every reserved decision (merge, deploy, data, destruction, settings) with the owner and never bypasses host permission gates.
+
+The Lead is not a persona and not the router persona rejected below: it owns an outcome, durable state, admission, and reconciliation against an owner-accepted contract. Specialist personas stay single-perspective and non-delegating under it.
 
 ## Worked example: valid orchestration
 
@@ -96,10 +108,12 @@ Why this fails:
 - The user already knows they want a review; let them call `/review` directly
 - Replicates work that slash commands and `AGENTS.md` intent-mapping already do
 
+A contract-authorized Project Lead does not make this valid: the Lead never inserts a persona whose only job is routing. It routes through `using-agent-skills` and its own recorded decisions.
+
 ## Rules for personas
 
 1. A persona is a single role with a single output format. If you find yourself adding a second role, create a second persona.
-2. **Personas do not invoke other personas.** Composition is the job of slash commands or the user. On Claude Code this is also a hard platform constraint — *"subagents cannot spawn other subagents"* — so the rule is enforced for you.
+2. **Personas do not invoke other personas.** Composition is the job of slash commands, the user, or an authorized Project Lead. On Claude Code this is also a hard platform constraint — *"subagents cannot spawn other subagents"* — so the rule is enforced for you.
 3. A persona may invoke skills (the *how*).
 4. Every persona file ends with a "Composition" block stating where it fits.
 

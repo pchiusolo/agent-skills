@@ -48,13 +48,25 @@ The depth behind these items lives in `code-review-and-quality` (the five-axis r
 - [ ] Security implications reviewed for any untrusted input, auth, or data handling (see `security-and-hardening`)
 - [ ] Observability in place for new critical paths (logs, metrics, traces) (see `observability-and-instrumentation`)
 - [ ] Rollback path exists for anything risky (see `shipping-and-launch`)
-- [ ] The human has reviewed and approved before merge or deploy
+- [ ] The human has reviewed and approved before merge or deploy (under an engagement, merge and deploy stay reserved owner decisions unless the contract explicitly authorizes them; see [autonomous-delivery-contract.md](autonomous-delivery-contract.md))
+
+## Evidence at the Final Revision
+
+A claim of done is a claim about one exact revision. Before work counts as complete, record against the final revision (the commit SHA being delivered):
+
+- [ ] Every acceptance criterion checked against that revision
+- [ ] The test commands run at that revision, with their output
+- [ ] A fresh, independent review at that same revision: a reviewer in a new context that receives the artifact and its contract, not the author's reasoning. Same-context sequential persona passes, self-questioning, and the author re-reading its own work do not count. If no fresh-context reviewer is available, verification is incomplete; say so rather than reporting it as passed
+- [ ] Every review finding reconciled against the code and tests: fixed, accepted as a documented trade-off, or shown to be noise
+
+**A head change invalidates the affected claims.** A new commit, amend, rebase, or base merge moves the revision; test results and review findings tied to the old revision no longer cover the files it changed. Re-run the affected tests and review the change at the new head before claiming done again.
 
 ## How to Apply
 
 - **Per task**: confirm the Correctness and Quality sections before checking the task off.
 - **Per feature**: confirm Integration and Documentation before considering the feature complete.
 - **Per release**: the full checklist is the floor; `shipping-and-launch` adds the deploy-specific gates on top.
+- **Per delivery** (a pull request, a release candidate, or an engagement outcome): record the Evidence at the Final Revision before calling it complete.
 
 Tailor the list to the project once, then reuse it unchanged. A Definition of Done that is renegotiated every sprint is not a Definition of Done.
 
@@ -65,3 +77,5 @@ Tailor the list to the project once, then reuse it unchanged. A Definition of Do
 - A different bar applied depending on deadline pressure.
 - Acceptance criteria treated as the whole bar, with no standing quality floor.
 - "Done" declared before human review on changes that need it.
+- Test output or a review from an earlier commit cited as evidence for a later head.
+- A same-context self-review reported as independent review.
