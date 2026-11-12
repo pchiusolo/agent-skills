@@ -142,6 +142,8 @@ If a task is L or larger, it should be broken into smaller tasks. An agent perfo
 
 ## Output Files
 
+**Under an engagement** (see `../../references/autonomous-delivery-contract.md`), the plan document and task list target the engagement names take precedence over everything below, including the project's rules and the defaults.
+
 - **Plan document:** Save the implementation plan to `tasks/plan.md`. This is always a markdown file — design decisions, risks, and open questions don't map cleanly onto individual tracker issues.
 - **Task list:** Record each task in the **task list target** (defined below).
 
@@ -150,7 +152,7 @@ Create the `tasks/` directory if it does not exist.
 **Never overwrite an incomplete plan.** Before writing `tasks/plan.md` or `tasks/todo.md`, check whether they already exist and still contain unchecked tasks:
 
 - Same work being replanned (the user asked to revise or extend this plan) → update the existing files in place.
-- Different work → **stop and ask.** The unchecked tasks may be mid-build in another session. Do not delete, overwrite, or rename the existing files on your own; present the conflict and let the user decide (finish the old plan first, explicitly discard it, or tell you where the new plan should go).
+- Different work → **stop and ask.** The unchecked tasks may be mid-build in another session. Do not delete, overwrite, or rename the existing files on your own; present the conflict and let the user decide (finish the old plan first, explicitly discard it, or tell you where the new plan should go). Under an engagement, record the conflict for the owner instead; the rule against overwriting still holds.
 
 The same rule applies to an external task list target: never bulk-close or delete another plan's open tracker items to make room for new ones.
 
@@ -160,6 +162,8 @@ The task list target is where tasks and checkpoints are recorded. It is defined 
 
 - **Default: a checklist-style markdown file at `tasks/todo.md`.** This is the convention the `/build` command and other downstream tooling expect. Use it unless the project says otherwise.
 - **External tracker:** if the project's agent rules (`CLAUDE.md`, `AGENTS.md`, etc.) or the user designate an issue tracker (e.g. GitHub Issues, Jira, Linear, `bd`/beads), create one tracker item per task instead of writing `tasks/todo.md`. Map the Step 4 structure onto the tracker's fields: acceptance criteria and verification steps in the item body, dependencies via the tracker's linking mechanism (`bd dep add`, "blocked by", etc.). Record Step 5 checkpoints as tracker items too, or as a checklist in the plan document if the tracker has no natural equivalent.
+
+When the plan covers one module of a capability map, name its module id in the plan title so `/build` can tell which module the plan belongs to.
 
 When using an external tracker, note it in `tasks/plan.md` (e.g. "Tasks tracked in Linear project FOO") so downstream steps and future sessions know where to look, and keep the plan document's Task List section as an ordered index of tracker item IDs or links rather than a duplicate checklist.
 
@@ -250,7 +254,7 @@ Before starting implementation, confirm:
 - [ ] No pre-existing incomplete plan was overwritten without explicit user confirmation
 - [ ] No task touches more than ~5 files
 - [ ] Checkpoints exist between major phases
-- [ ] The human has reviewed and approved the plan
+- [ ] The human has reviewed and approved the plan (under an engagement: a recorded owner approval or a cited contract clause; an uncovered owner decision blocks rather than being assumed)
 
 ## See Also
 
