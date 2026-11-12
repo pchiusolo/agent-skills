@@ -132,6 +132,11 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
       - name: Test sdd-cache hooks (stubbed curl, no network)
         run: bash hooks/sdd-cache-test.sh
 
@@ -164,6 +169,8 @@ jobs:
       - name: Configure git to use HTTPS
         run: git config --global url."https://github.com/".insteadOf "git@github.com:"
 
+      # The marketplace's plugin source is "./", so this installs the checked-out
+      # revision (the PR head), not a published copy of the repository.
       - name: Add marketplace
         run: claude plugin marketplace add ./
 
@@ -171,4 +178,4 @@ jobs:
         run: claude plugin marketplace list
 
       - name: Install plugin
-        run: claude plugin install agent-skills@addy-agent-skills --scope user
+        run: claude plugin install agent-skills@pchiusolo-agent-skills --scope user

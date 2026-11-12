@@ -4,7 +4,7 @@ The standalone `copilot` command-line tool installs this repository as a plugin 
 
 ## Install
 
-**From this repository's marketplace** — register it, then install from it. `addy-agent-skills` is the marketplace name this repository declares, not a GitHub-wide registry, and the name only resolves after the `marketplace add`:
+**From this repository's marketplace** — register it, then install from it. `addy-agent-skills` is the marketplace name the upstream repository declares, not a GitHub-wide registry, and the name only resolves after the `marketplace add`. This fork declares `pchiusolo-agent-skills` instead: use `pchiusolo/agent-skills` and `agent-skills@pchiusolo-agent-skills` to install it.
 
 ```bash
 copilot plugin marketplace add addyosmani/agent-skills
