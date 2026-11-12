@@ -134,7 +134,7 @@ Commit the completed task only when the user or repository workflow authorizes i
 
 In the fresh session, read the rules, spec, plan, task status, and actual `git status` before acting. Re-run verification when its recorded baseline is missing, the code has moved, or the next task depends on it. Do not infer approval from a previous conversation unless the durable artifact records it.
 
-An external harness may automate exit and restart between these boundaries. That loop must treat the artifacts and repository state as the source of truth, preserve human approval gates, and distinguish a completed task from a crashed process. The skill defines the handoff contract; process supervision and model selection belong to the harness.
+An external harness may automate exit and restart between these boundaries. That loop must treat the artifacts and repository state as the source of truth, preserve human approval gates (under an engagement, an approval counts only when the durable engagement record holds it; see `../../references/autonomous-delivery-contract.md`), and distinguish a completed task from a crashed process. The skill defines the handoff contract; process supervision and model selection belong to the harness.
 
 ## Context Packing Strategies
 

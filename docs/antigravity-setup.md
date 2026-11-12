@@ -49,6 +49,8 @@ Antigravity's [migration tooling](https://www.agy.dev/docs/cli/gcli-migration/) 
 
 Use the native plugin skills directly while that importer limitation applies:
 
+The `/agent-skills:` prefix below is the installed plugin's name. When another plugin vendors this library, the same skills appear under that plugin's prefix instead.
+
 | Intended wrapper | Direct Antigravity invocation | Notes |
 |------------------|-------------------------------|-------|
 | `/spec` | `/agent-skills:spec-driven-development` | Writes a structured spec before code |
@@ -127,4 +129,4 @@ agy --sandbox
    agy update
    ```
 2. **Review before execution:** When agents execute complex refactoring tasks using these skills, use `Ctrl+r` to enter the **Artifact Review** screen to review, edit, or approve code before it is committed.
-3. **Control permissions:** You can use the `--dangerously-skip-permissions` flag only in trusted local projects where you want to bypass manual tool approval prompts.
+3. **Control permissions:** You can use the `--dangerously-skip-permissions` flag only in trusted local projects where you want to bypass manual tool approval prompts. Never use it for an autonomous Project Lead engagement: the contract adds autonomy only inside host permission gates ([references/autonomous-delivery-contract.md](../references/autonomous-delivery-contract.md)).

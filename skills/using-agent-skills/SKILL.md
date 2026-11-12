@@ -146,6 +146,8 @@ These are the subtle errors that look like productivity but create problems:
 
 4. **When in doubt, start with a spec.** If the task is non-trivial and there's no spec, begin with `spec-driven-development`.
 
+5. **Under an engagement, "ask" means "check the record, then record and block."** Wherever a skill says to ask the user, wait for approval, or stop and ask, check the durable engagement record first (see `../../references/autonomous-delivery-contract.md`): proceed when the contract or a recorded owner answer covers the decision, citing it; otherwise record the question for the owner and block that line of work. Never invent the answer, and never treat this as permission to skip a safety check, a quality gate, or a host permission prompt. Without an engagement, ask as the skill says.
+
 ## Lifecycle Sequence
 
 For a complete feature, the typical skill sequence is:
