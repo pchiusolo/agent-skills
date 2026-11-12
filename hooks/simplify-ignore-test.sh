@@ -1,652 +1,310 @@
 #!/bin/bash
 # simplify-ignore-test.sh — Tests for the simplify-ignore hook
 #
-# Exercises filter_file by extracting function definitions from the hook.
+# Drives hooks/simplify-ignore.sh with the JSON Claude Code sends for each
+# hook phase and checks the JSON it answers with. The invariant behind every
+# test: the hook never changes the project. Each phase snapshots the sha256 of
+# every file under the project (the source file included) before and after
+# the hook runs, and the two snapshots must match. Only the simulated host
+# write in the lifecycle test changes a file, and it must keep every
+# protected block verbatim.
+#
 # Run: bash hooks/simplify-ignore-test.sh
 
 set -euo pipefail
 
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+HOOK="$HERE/simplify-ignore.sh"
+
+if ! command -v node >/dev/null 2>&1; then
+  printf 'SKIP: node not available; the simplify-ignore hook no-ops without it\n'
+  exit 0
+fi
+
 PASS=0 FAIL=0
-TMPDIR=$(mktemp -d)
-trap 'rm -rf "$TMPDIR"' EXIT
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
 
-export CACHE="$TMPDIR/cache"
-mkdir -p "$CACHE"
+# Windows (Git Bash) hands JSON paths to a native node; give it a mixed path.
+winpath() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
+PROJ="$(winpath "$TMP/proj")"
+mkdir -p "$PROJ"
+export CLAUDE_PROJECT_DIR="$PROJ"
 
-# Extract function definitions we need
-hash_cmd() {
-  if command -v shasum >/dev/null 2>&1; then shasum
-  elif command -v sha1sum >/dev/null 2>&1; then sha1sum
-  else printf '%s\n' "error: missing shasum or sha1sum" >&2; exit 1; fi
+sha256() { if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d' ' -f1; else shasum -a 256 "$1" | cut -d' ' -f1; fi; }
+sha1() { if command -v sha1sum >/dev/null 2>&1; then sha1sum | cut -c1-8; else shasum | cut -c1-8; fi; }
+# Every file under the project with its sha256, so a write anywhere shows up.
+snapshot() { (cd "$PROJ" && find . -type f | LC_ALL=C sort | while IFS= read -r f; do printf '%s %s\n' "$(sha256 "$f")" "$f"; done); }
+
+OUT="$TMP/out.json" ERR="$TMP/err.txt" IN="$TMP/in.json"
+RC=0
+BEFORE=""
+
+# run_hook — feed $IN to the hook; capture stdout, stderr, exit code, and
+# assert the project tree is byte-for-byte unchanged.
+run_hook() {
+  local label="$1"
+  BEFORE=$(snapshot)
+  RC=0
+  bash "$HOOK" < "$IN" > "$OUT" 2> "$ERR" || RC=$?
+  assert_eq "$label: exit code 0" "0" "$RC"
+  assert_eq "$label: every project file's sha256 unchanged" "$BEFORE" "$(snapshot)"
 }
-file_id() { printf '%s' "$1" | hash_cmd | cut -c1-16; }
-block_hash() { printf '%s' "$1" | hash_cmd | cut -c1-8; }
-escape_glob() {
-  local s="$1"
-  s="${s//\\/\\\\}"
-  s="${s//\*/\\*}"
-  s="${s//\?/\\?}"
-  s="${s//\[/\\[}"
-  printf '%s' "$s"
+
+# out <js-expr over o> — a field of the hook's JSON answer ('' if absent).
+out() {
+  node -e "const raw=require('fs').readFileSync(0,'utf8');const o=raw?JSON.parse(raw):null;const v=(o=>{try{return $1}catch{return undefined}})(o);process.stdout.write(v===undefined||v===null?'':typeof v==='string'?v:JSON.stringify(v))" < "$OUT"
 }
 
-# Extract filter_file from the hook script (line 59 "filter_file()" to line 142 closing brace)
-eval "$(sed -n '/^filter_file()/,/^}/p' hooks/simplify-ignore.sh)"
+# Builders for the hook input Claude Code sends (shape observed on 2.1.322).
+mk_read() { # file [startLine [limit]]
+  node -e '
+const fs=require("fs");const [f,cwd,start,limit]=process.argv.slice(1);
+const lines=fs.readFileSync(f,"utf8").split("\n");
+const s=Number(start||1);const l=limit?Number(limit):lines.length-s+1;
+const content=lines.slice(s-1,s-1+l).join("\n");
+process.stdout.write(JSON.stringify({hook_event_name:"PostToolUse",tool_name:"Read",cwd,tool_input:{file_path:f},
+  tool_response:{type:"text",file:{filePath:f,content,numLines:l,startLine:s,totalLines:lines.length}}}));' "$1" "$PROJ" "${2:-}" "${3:-}" > "$IN"
+}
+mk_write() { # file content-file
+  node -e '
+const fs=require("fs");const [f,c,cwd]=process.argv.slice(1);
+process.stdout.write(JSON.stringify({hook_event_name:"PreToolUse",tool_name:"Write",cwd,tool_input:{file_path:f,content:fs.readFileSync(c,"utf8")}}));' "$1" "$2" "$PROJ" > "$IN"
+}
+mk_edit() { # file old-file new-file [replace_all]
+  node -e '
+const fs=require("fs");const [f,o,n,cwd,all]=process.argv.slice(1);
+const ti={file_path:f,old_string:fs.readFileSync(o,"utf8"),new_string:fs.readFileSync(n,"utf8")};
+if(all)ti.replace_all=true;
+process.stdout.write(JSON.stringify({hook_event_name:"PreToolUse",tool_name:"Edit",cwd,tool_input:ti}));' "$1" "$2" "$3" "$PROJ" "${4:-}" > "$IN"
+}
+mk_event() { # hook_event_name [tool_name]
+  node -e 'const [e,t,cwd]=process.argv.slice(1);const o={hook_event_name:e,cwd};if(t)o.tool_name=t;process.stdout.write(JSON.stringify(o));' "$1" "${2:-}" "$PROJ" > "$IN"
+}
 
 assert_eq() {
   local label="$1" expected="$2" actual="$3"
   if [ "$expected" = "$actual" ]; then
-    PASS=$((PASS + 1))
-    printf '  PASS: %s\n' "$label"
+    PASS=$((PASS + 1)); printf '  PASS: %s\n' "$label"
   else
-    FAIL=$((FAIL + 1))
-    printf '  FAIL: %s\n' "$label" >&2
+    FAIL=$((FAIL + 1)); printf '  FAIL: %s\n' "$label" >&2
     printf '    expected: %s\n' "$(printf '%s' "$expected" | cat -v)" >&2
     printf '    actual:   %s\n' "$(printf '%s' "$actual" | cat -v)" >&2
   fi
 }
-
-# ── Test 1: Single-line block produces exactly one placeholder ────────────
-printf 'Test 1: Single-line block (start+end on same line)\n'
-rm -f "$CACHE"/*
-
-SRC="$TMPDIR/single-line.js"
-DEST="$TMPDIR/single-line-filtered.js"
-cat > "$SRC" <<'EOF'
-const a = 1;
-/* simplify-ignore-start */ const secret = 42; /* simplify-ignore-end */
-const b = 2;
-EOF
-
-FID="test_single"
-filter_file "$SRC" "$DEST" "$FID"
-
-placeholder_count=$(grep -c 'BLOCK_' "$DEST")
-assert_eq "exactly one placeholder line" "1" "$placeholder_count"
-assert_eq "line before block preserved" "1" "$(grep -c 'const a = 1' "$DEST")"
-assert_eq "line after block preserved" "1" "$(grep -c 'const b = 2' "$DEST")"
-
-block_files=$(ls "$CACHE/${FID}".block.* 2>/dev/null | wc -l | tr -d ' ')
-assert_eq "one block file in cache" "1" "$block_files"
-
-block_content=$(cat "$CACHE/${FID}".block.*)
-assert_eq "block content matches" \
-  "/* simplify-ignore-start */ const secret = 42; /* simplify-ignore-end */" \
-  "$block_content"
-
-# ── Test 2: Multi-line block ─────────────────────────────────────────────
-printf '\nTest 2: Multi-line block\n'
-rm -f "$CACHE"/*
-
-SRC="$TMPDIR/multi-line.js"
-DEST="$TMPDIR/multi-line-filtered.js"
-cat > "$SRC" <<'EOF'
-const a = 1;
-// simplify-ignore-start
-const secret1 = 42;
-const secret2 = 99;
-// simplify-ignore-end
-const b = 2;
-EOF
-
-FID="test_multi"
-filter_file "$SRC" "$DEST" "$FID"
-
-placeholder_count=$(grep -c 'BLOCK_' "$DEST")
-assert_eq "exactly one placeholder for multi-line block" "1" "$placeholder_count"
-
-output_lines=$(wc -l < "$DEST" | tr -d ' ')
-assert_eq "output has 3 lines (before + placeholder + after)" "3" "$output_lines"
-
-# ── Test 3: Multiple blocks in one file ──────────────────────────────────
-printf '\nTest 3: Multiple blocks in one file\n'
-rm -f "$CACHE"/*
-
-SRC="$TMPDIR/multi-block.js"
-DEST="$TMPDIR/multi-block-filtered.js"
-cat > "$SRC" <<'EOF'
-line1
-// simplify-ignore-start
-blockA
-// simplify-ignore-end
-line2
-// simplify-ignore-start
-blockB
-// simplify-ignore-end
-line3
-EOF
-
-FID="test_multiblock"
-filter_file "$SRC" "$DEST" "$FID"
-
-placeholder_count=$(grep -c 'BLOCK_' "$DEST")
-assert_eq "two placeholders for two blocks" "2" "$placeholder_count"
-
-block_files=$(ls "$CACHE/${FID}".block.* 2>/dev/null | wc -l | tr -d ' ')
-assert_eq "two block files in cache" "2" "$block_files"
-
-# ── Test 4: Reason string preserved ──────────────────────────────────────
-printf '\nTest 4: Reason string in placeholder\n'
-rm -f "$CACHE"/*
-
-SRC="$TMPDIR/reason.js"
-DEST="$TMPDIR/reason-filtered.js"
-cat > "$SRC" <<'EOF'
-// simplify-ignore-start: perf-critical
-hot_loop();
-// simplify-ignore-end
-EOF
-
-FID="test_reason"
-filter_file "$SRC" "$DEST" "$FID"
-
-assert_eq "placeholder includes reason" "1" "$(grep -c 'perf-critical' "$DEST")"
-
-reason_files=$(ls "$CACHE/${FID}".reason.* 2>/dev/null | wc -l | tr -d ' ')
-assert_eq "reason file saved" "1" "$reason_files"
-assert_eq "reason content" "perf-critical" "$(cat "$CACHE/${FID}".reason.*)"
-
-# ── Test 5: Trailing newline preservation ────────────────────────────────
-printf '\nTest 5: Trailing newline preservation\n'
-rm -f "$CACHE"/*
-
-SRC="$TMPDIR/no-trailing-nl.js"
-DEST="$TMPDIR/no-trailing-nl-filtered.js"
-printf 'line1\n// simplify-ignore-start\nsecret\n// simplify-ignore-end' > "$SRC"
-
-FID="test_trail"
-filter_file "$SRC" "$DEST" "$FID"
-
-# Source has no trailing newline; dest should also have no trailing newline
-src_has_nl=$(tail -c 1 "$SRC" | wc -l | tr -d ' ')
-dest_has_nl=$(tail -c 1 "$DEST" | wc -l | tr -d ' ')
-assert_eq "dest preserves no-trailing-newline from source" "$src_has_nl" "$dest_has_nl"
-
-# ── Test 6: No blocks → return 1 ────────────────────────────────────────
-printf '\nTest 6: No blocks returns 1\n'
-rm -f "$CACHE"/*
-
-SRC="$TMPDIR/no-blocks.js"
-DEST="$TMPDIR/no-blocks-filtered.js"
-cat > "$SRC" <<'EOF'
-const a = 1;
-const b = 2;
-EOF
-
-FID="test_noblocks"
-rc=0
-filter_file "$SRC" "$DEST" "$FID" || rc=$?
-assert_eq "returns 1 when no blocks found" "1" "$rc"
-
-# ── Test 7: Unclosed block emits warning and flushes ─────────────────────
-printf '\nTest 7: Unclosed block\n'
-rm -f "$CACHE"/*
-
-SRC="$TMPDIR/unclosed.js"
-DEST="$TMPDIR/unclosed-filtered.js"
-cat > "$SRC" <<'EOF'
-line1
-// simplify-ignore-start
-orphan code
-EOF
-
-FID="test_unclosed"
-stderr_out=$(filter_file "$SRC" "$DEST" "$FID" 2>&1) || true
-assert_eq "warning emitted for unclosed block" "1" "$(printf '%s' "$stderr_out" | grep -c 'unclosed')"
-assert_eq "orphan code flushed to output" "1" "$(grep -c 'orphan code' "$DEST")"
-
-# ── Test 8: Single-line block with reason ────────────────────────────────
-printf '\nTest 8: Single-line block with reason\n'
-rm -f "$CACHE"/*
-
-SRC="$TMPDIR/single-reason.js"
-DEST="$TMPDIR/single-reason-filtered.js"
-cat > "$SRC" <<'EOF'
-before
-/* simplify-ignore-start: hot-path */ x = compute(); /* simplify-ignore-end */
-after
-EOF
-
-FID="test_single_reason"
-filter_file "$SRC" "$DEST" "$FID"
-
-placeholder_count=$(grep -c 'BLOCK_' "$DEST")
-assert_eq "exactly one placeholder for single-line+reason" "1" "$placeholder_count"
-assert_eq "reason in placeholder" "1" "$(grep -c 'hot-path' "$DEST")"
-
-# ── Test 9: HTML comment syntax ──────────────────────────────────────────
-printf '\nTest 9: HTML comment syntax\n'
-rm -f "$CACHE"/*
-
-SRC="$TMPDIR/html.html"
-DEST="$TMPDIR/html-filtered.html"
-cat > "$SRC" <<'EOF'
-<div>
-<!-- simplify-ignore-start -->
-<secret-component />
-<!-- simplify-ignore-end -->
-</div>
-EOF
-
-FID="test_html"
-filter_file "$SRC" "$DEST" "$FID"
-
-placeholder_count=$(grep -c 'BLOCK_' "$DEST")
-assert_eq "HTML block replaced" "1" "$placeholder_count"
-assert_eq "HTML suffix preserved" "1" "$(grep -c '\-\->' "$DEST")"
-
-# ── Test 10: JSON parsing error warning ──────────────────────────────────
-printf '\nTest 10: Malformed JSON input produces warning\n'
-
-# Without jq the hook's guard exits before parsing input. Assert whichever
-# branch this machine can exercise (same pattern as session-start-test.sh).
-warning_out=$(echo 'NOT_JSON{{{' | bash hooks/simplify-ignore.sh 2>&1) || true
-if command -v jq >/dev/null 2>&1; then
-  assert_eq "warning on bad JSON" "1" "$(printf '%s' "$warning_out" | grep -c 'Warning.*failed to parse')"
-else
-  assert_eq "missing-jq guard surfaced" "1" "$(printf '%s' "$warning_out" | grep -c 'error: missing jq')"
-fi
-
-# ── Test 11: Stop keeps a change made outside Edit|Write ─────────────────
-printf '\nTest 11: Stop keeps a Bash write made after the last Edit\n'
-
-if ! command -v jq >/dev/null 2>&1; then
-  printf '  SKIP: full lifecycle needs jq (the hook exits at its jq guard)\n'
-else
-  PROJ="$TMPDIR/proj"
-  rm -rf "$PROJ"
-  mkdir -p "$PROJ/.claude"
-  TARGET="$PROJ/app.js"
-  cat > "$TARGET" <<'EOF'
-const editable = 1;
-/* simplify-ignore-start: perf-critical */
-const protectedValue = 42;
-/* simplify-ignore-end */
-EOF
-
-  hook_event() { printf '%s' "$1" | CLAUDE_PROJECT_DIR="$PROJ" bash hooks/simplify-ignore.sh; }
-  read_event=$(printf '{"tool_name":"Read","tool_input":{"file_path":"%s"}}' "$TARGET")
-  edit_event=$(printf '{"tool_name":"Edit","tool_input":{"file_path":"%s"}}' "$TARGET")
-
-  # PreToolUse Read → block hidden behind a placeholder, backup taken
-  hook_event "$read_event"
-  assert_eq "protected block hidden after Read" "1" "$(grep -c 'BLOCK_' "$TARGET")"
-  assert_eq "protected content off disk after Read" "0" "$(grep -c 'protectedValue' "$TARGET")"
-
-  # Model edits the filtered file → PostToolUse Edit refreshes the backup
-  printf 'const added = 3;\n' >> "$TARGET"
-  hook_event "$edit_event"
-
-  # A later write through Bash — no Edit or Write event follows it
-  sed 's/const editable = 1;/const editable = 2;/' "$TARGET" > "$TMPDIR/bash-write.js"
-  cat "$TMPDIR/bash-write.js" > "$TARGET"
-
-  # Stop
-  hook_event '{}'
-
-  assert_eq "Bash write survives Stop" "1" "$(grep -c 'const editable = 2;' "$TARGET")"
-  assert_eq "stale backup value not restored" "0" "$(grep -c 'const editable = 1;' "$TARGET")"
-  assert_eq "edit made through Edit survives Stop" "1" "$(grep -c 'const added = 3;' "$TARGET")"
-  assert_eq "protected block back on disk" "1" "$(grep -c 'const protectedValue = 42;' "$TARGET")"
-  assert_eq "no placeholder left after Stop" "0" "$(grep -c 'BLOCK_' "$TARGET")"
-fi
-
-# ── Test 12: Stop fallback keeps the rewrite in the cache ───────────────
-printf '\nTest 12: Wholesale rewrite is kept in the cache before the backup restore\n'
-
-if ! command -v jq >/dev/null 2>&1; then
-  printf '  SKIP: full lifecycle needs jq (the hook exits at its jq guard)\n'
-else
-  PROJ="$TMPDIR/proj-rewrite"
-  rm -rf "$PROJ"
-  mkdir -p "$PROJ/.claude"
-  TARGET="$PROJ/app.js"
-  cat > "$TARGET" <<'EOF'
-const editable = 1;
-/* simplify-ignore-start: perf-critical */
-const protectedValue = 42;
-/* simplify-ignore-end */
-EOF
-
-  hook_event() { printf '%s' "$1" | CLAUDE_PROJECT_DIR="$PROJ" bash hooks/simplify-ignore.sh; }
-  read_event=$(printf '{"tool_name":"Read","tool_input":{"file_path":"%s"}}' "$TARGET")
-
-  hook_event "$read_event"
-  assert_eq "protected block hidden after Read" "1" "$(grep -c 'BLOCK_' "$TARGET")"
-
-  # Wholesale rewrite — every placeholder is gone, so Stop has nothing to expand
-  printf 'const rewritten = 7;\n' > "$TARGET"
-
-  stop_out=$(hook_event '{}' 2>&1) || true
-
-  PROJ_CACHE="$PROJ/.claude/.simplify-ignore-cache"
-  RECOVERED="$PROJ_CACHE/$(file_id "$TARGET").recovered"
-
-  assert_eq "backup restored over the rewrite" "1" "$(grep -c 'const protectedValue = 42;' "$TARGET")"
-  assert_eq "rewrite kept in cache" "1" "$([ -f "$RECOVERED" ] && echo 1 || echo 0)"
-  assert_eq "cached rewrite has the rewritten content" "const rewritten = 7;" "$(cat "$RECOVERED")"
-  assert_eq "warning names the restored file" "1" \
-    "$(printf '%s' "$stop_out" | grep -c -F "$TARGET")"
-  assert_eq "warning names the cached rewrite" "1" \
-    "$(printf '%s' "$stop_out" | grep -c -F "$RECOVERED")"
-fi
-
-# ── Test 13: Read → direct write with no event → Stop ───────────────────
-printf '\nTest 13: A write with no Edit or Write event survives Stop\n'
-
-if ! command -v jq >/dev/null 2>&1; then
-  printf '  SKIP: full lifecycle needs jq (the hook exits at its jq guard)\n'
-else
-  PROJ="$TMPDIR/proj-noevent"
-  rm -rf "$PROJ"
-  mkdir -p "$PROJ/.claude"
-  TARGET="$PROJ/app.js"
-  cat > "$TARGET" <<'EOF'
-const editable = 1;
-/* simplify-ignore-start: perf-critical */
-const protectedValue = 42;
-/* simplify-ignore-end */
-EOF
-
-  hook_event() { printf '%s' "$1" | CLAUDE_PROJECT_DIR="$PROJ" bash hooks/simplify-ignore.sh; }
-  read_event=$(printf '{"tool_name":"Read","tool_input":{"file_path":"%s"}}' "$TARGET")
-
-  # Read → placeholder on disk, backup taken
-  hook_event "$read_event"
-
-  # Direct write, no Edit or Write event follows it
-  sed 's/const editable = 1;/const editable = 9;/' "$TARGET" > "$TMPDIR/noevent-write.js"
-  cat "$TMPDIR/noevent-write.js" > "$TARGET"
-
-  # Stop
-  hook_event '{}'
-
-  assert_eq "write with no event survives Stop" "1" "$(grep -c 'const editable = 9;' "$TARGET")"
-  assert_eq "stale backup value not restored" "0" "$(grep -c 'const editable = 1;' "$TARGET")"
-  assert_eq "protected block back on disk" "1" "$(grep -c 'const protectedValue = 42;' "$TARGET")"
-  assert_eq "no placeholder left after Stop" "0" "$(grep -c 'BLOCK_' "$TARGET")"
-fi
-
-# ── Tests 14-16: full-lifecycle round-trip fidelity ──────────────────────
-# Run the hook end-to-end (Read → [Edit] → Stop) against an isolated
-# CLAUDE_PROJECT_DIR and assert the original bytes are recovered exactly.
-# These exercise the expand/restore half of the hook, which the
-# function-extraction tests above cannot reach.
-
-if command -v jq >/dev/null 2>&1; then
-
-rt_hook_event() {
-  # rt_hook_event <project_dir> <tool_name|""> <file_path|"">
-  local proj="$1" tool="$2" fp="$3" input
-  if [ -n "$tool" ]; then
-    input=$(jq -n --arg t "$tool" --arg fp "$fp" \
-      '{tool_name:$t, tool_input:{file_path:$fp}}')
-  else
-    input='{}'
-  fi
-  printf '%s' "$input" | CLAUDE_PROJECT_DIR="$proj" bash hooks/simplify-ignore.sh
+assert_contains() {
+  case "$3" in *"$2"*) PASS=$((PASS + 1)); printf '  PASS: %s\n' "$1" ;;
+  *) FAIL=$((FAIL + 1)); printf '  FAIL: %s\n    missing: %s\n    in: %.300s\n' "$1" "$2" "$3" >&2 ;; esac
+}
+assert_not_contains() {
+  case "$3" in *"$2"*) FAIL=$((FAIL + 1)); printf '  FAIL: %s\n    unexpected: %s\n' "$1" "$2" >&2 ;;
+  *) PASS=$((PASS + 1)); printf '  PASS: %s\n' "$1" ;; esac
+}
+assert_same_file() {
+  if cmp -s "$2" "$3"; then PASS=$((PASS + 1)); printf '  PASS: %s\n' "$1"
+  else FAIL=$((FAIL + 1)); printf '  FAIL: %s\n' "$1" >&2; diff "$2" "$3" | head -20 >&2 || true; fi
 }
 
-# ── Test 14: Read → Stop restores the file byte-identically ──────────────
-printf '\nTest 14: Round-trip Read → Stop (byte fidelity)\n'
-PROJ="$TMPDIR/rt14"; mkdir -p "$PROJ"
-RT="$PROJ/roundtrip.js"
-cat > "$RT" <<'EOF'
-const a = `template ${literal}`;
-// simplify-ignore-start: perf-critical
-const secret = "glob*chars? [and] \\backslashes";
-if (a && b) { mask = flags & 0xff; } // ampersands must survive bash 5.2 patsub_replacement
-hot_loop($HOME);
-// simplify-ignore-end
-middle line
-/* simplify-ignore-start */ const inline = 1; /* simplify-ignore-end */
-const b = 2;
-EOF
-cp "$RT" "$PROJ/roundtrip.orig"
-
-rt_hook_event "$PROJ" "Read" "$RT"
-assert_eq "blocks hidden on disk after Read" "2" "$(grep -c 'BLOCK_' "$RT")"
-assert_eq "secret absent from disk after Read" "0" "$(grep -c 'secret' "$RT")"
-
-rt_hook_event "$PROJ" "" ""
-if cmp -s "$RT" "$PROJ/roundtrip.orig"; then
-  assert_eq "Stop restores original bytes" "identical" "identical"
-else
-  assert_eq "Stop restores original bytes" "identical" "$(cmp "$RT" "$PROJ/roundtrip.orig" 2>&1 | head -1)"
-fi
-
-# ── Test 15: Round-trip preserves missing trailing newline ────────────────
-printf '\nTest 15: Round-trip with no trailing newline\n'
-PROJ="$TMPDIR/rt15"; mkdir -p "$PROJ"
-RT="$PROJ/nonewline.js"
-printf 'top\n// simplify-ignore-start\nhidden\n// simplify-ignore-end\nbottom' > "$RT"
-cp "$RT" "$PROJ/nonewline.orig"
-
-rt_hook_event "$PROJ" "Read" "$RT"
-assert_eq "block hidden" "1" "$(grep -c 'BLOCK_' "$RT")"
-rt_hook_event "$PROJ" "" ""
-if cmp -s "$RT" "$PROJ/nonewline.orig"; then
-  assert_eq "no-trailing-newline file restored byte-identically" "identical" "identical"
-else
-  assert_eq "no-trailing-newline file restored byte-identically" "identical" "differs"
-fi
-
-# ── Test 16: Read → model edit → Edit event → Stop keeps the edit ────────
-printf '\nTest 16: Round-trip with an edit during the session\n'
-PROJ="$TMPDIR/rt16"; mkdir -p "$PROJ"
-RT="$PROJ/edited.js"
-cat > "$RT" <<'EOF'
+# ── Fixture: a JS file with one protected block. `&&` and backslashes guard
+#    against replacement-side expansion bugs (bash patsub_replacement, $& in
+#    JS String.replace).
+SRC="$PROJ/src.js"
+cat > "$SRC" <<'EOF'
 const a = 1;
-// simplify-ignore-start
-const secret = 42;
-// simplify-ignore-end
-const b = 2;
-EOF
-cp "$RT" "$PROJ/edited.orig"
-
-rt_hook_event "$PROJ" "Read" "$RT"
-# Simulate the model editing the filtered file: append a new line.
-printf '%s\n' "const added = true;" >> "$RT"
-rt_hook_event "$PROJ" "Edit" "$RT"
-
-assert_eq "disk still placeholdered after Edit" "1" "$(grep -c 'BLOCK_' "$RT")"
-assert_eq "secret still absent from disk after Edit" "0" "$(grep -c 'secret' "$RT")"
-assert_eq "added line survives re-filter" "1" "$(grep -c 'const added' "$RT")"
-BAK=$(ls "$PROJ/.claude/.simplify-ignore-cache"/*.bak 2>/dev/null | head -1)
-assert_eq "backup holds real content" "1" "$(grep -c 'const secret = 42' "${BAK:-/dev/null}")"
-assert_eq "backup holds the edit" "1" "$(grep -c 'const added' "${BAK:-/dev/null}")"
-
-rt_hook_event "$PROJ" "" ""
-EXPECTED="$PROJ/edited.expected"
-cp "$PROJ/edited.orig" "$EXPECTED"
-printf '%s\n' "const added = true;" >> "$EXPECTED"
-if cmp -s "$RT" "$EXPECTED"; then
-  assert_eq "Stop restores original + edit byte-identically" "identical" "identical"
-else
-  assert_eq "Stop restores original + edit byte-identically" "identical" "differs"
-fi
-
-# ── Test 17: a removed placeholder never takes its protected block with it ─
-printf '\nTest 17: Removing a placeholder line does not lose the protected block\n'
-PROJ="$TMPDIR/rt17"; mkdir -p "$PROJ"
-RT="$PROJ/dropped.js"
-cat > "$RT" <<'EOF'
-const a = 1;
-// simplify-ignore-start: first
-const keepOne = 42;
-// simplify-ignore-end
-const b = 2;
-// simplify-ignore-start: second
-const keepTwo = 43;
-// simplify-ignore-end
-EOF
-cp "$RT" "$PROJ/dropped.orig"
-
-rt_hook_event "$PROJ" "Read" "$RT"
-# The model deletes the first placeholder line (it looks like a stray comment)
-# and edits another line in the same Edit.
-awk 'f||!/BLOCK_/{print;next}{f=1}' "$RT" | sed 's/const a = 1;/const a = 9;/' > "$PROJ/t"
-cat "$PROJ/t" > "$RT"
-edit_rc=0
-edit_out=$(rt_hook_event "$PROJ" "Edit" "$RT" 2>&1) || edit_rc=$?
-BAK=$(ls "$PROJ/.claude/.simplify-ignore-cache"/*.bak 2>/dev/null | head -1) || true
-assert_eq "Edit that drops a placeholder exits 2 (stderr goes to the model)" "2" "$edit_rc"
-assert_eq "message names the dropped placeholder" "1" "$(printf '%s' "$edit_out" | grep -c 'BLOCK_.*: first' || true)"
-assert_eq "backup still holds the protected block" "1" "$(grep -c 'const keepOne = 42' "${BAK:-/dev/null}" || true)"
-
-stop_out=$(rt_hook_event "$PROJ" "" "" 2>&1) || true
-RECOVERED=$(ls "$PROJ/.claude/.simplify-ignore-cache"/*.recovered 2>/dev/null | head -1) || true
-assert_eq "Stop puts the protected block back" "1" "$(grep -c 'const keepOne = 42' "$RT" || true)"
-if cmp -s "$RT" "$PROJ/dropped.orig"; then
-  assert_eq "Stop restores the last good backup" "identical" "identical"
-else
-  assert_eq "Stop restores the last good backup" "identical" "differs"
-fi
-assert_eq "the edit is kept as .recovered" "1" "$(grep -c 'const a = 9;' "${RECOVERED:-/dev/null}" || true)"
-assert_eq ".recovered has the surviving block expanded" "1" "$(grep -c 'const keepTwo = 43' "${RECOVERED:-/dev/null}" || true)"
-assert_eq "Stop warns about the missing placeholder" "1" "$(printf '%s' "$stop_out" | grep -c 'placeholder is missing' || true)"
-
-# Same loss through a route that fires no Edit event (Bash, a formatter).
-PROJ="$TMPDIR/rt17b"; mkdir -p "$PROJ"
-RT="$PROJ/dropped.js"
-cp "$TMPDIR/rt17/dropped.orig" "$RT"
-rt_hook_event "$PROJ" "Read" "$RT"
-awk 'f||!/BLOCK_/{print;next}{f=1}' "$RT" > "$PROJ/t"
-cat "$PROJ/t" > "$RT"
-rt_hook_event "$PROJ" "" "" 2>/dev/null || true
-assert_eq "no-event removal: Stop puts the protected block back" "1" "$(grep -c 'const keepOne = 42' "$RT" || true)"
-
-# ── Test 18: a change reverted with git stays reverted and the block hidden ──
-printf '\nTest 18: Reverting a change with git during the session\n'
-if command -v git >/dev/null 2>&1; then
-  for variant in read-then-stop stop; do
-    PROJ="$TMPDIR/rt18-$variant"; mkdir -p "$PROJ"
-    RT="$PROJ/reverted.js"
-    cat > "$RT" <<'EOF'
-const a = 1;
-// simplify-ignore-start
-const secret = 42;
-// simplify-ignore-end
-const b = 2;
-EOF
-    cp "$RT" "$PROJ/reverted.orig"
-    git -C "$PROJ" init -q
-    git -C "$PROJ" config core.autocrlf false
-    git -C "$PROJ" add reverted.js
-    git -C "$PROJ" -c user.name=t -c user.email=t@t -c commit.gpgsign=false commit -qm base
-
-    rt_hook_event "$PROJ" "Read" "$RT"
-    printf '%s\n' "const broken = true;" >> "$RT"
-    rt_hook_event "$PROJ" "Edit" "$RT"
-    git -C "$PROJ" checkout -q -- reverted.js
-    if [ "$variant" = read-then-stop ]; then
-      rt_hook_event "$PROJ" "Read" "$RT" 2>/dev/null
-      assert_eq "$variant: Read after the revert hides the block" "0" "$(grep -c 'secret' "$RT")"
-      assert_eq "$variant: Read after the revert shows a placeholder" "1" "$(grep -c 'BLOCK_' "$RT")"
-    fi
-    rt_hook_event "$PROJ" "" "" 2>/dev/null
-    if cmp -s "$RT" "$PROJ/reverted.orig"; then
-      assert_eq "$variant: Stop keeps the reverted file" "identical" "identical"
-    else
-      assert_eq "$variant: Stop keeps the reverted file" "identical" "differs"
-    fi
-    KEPT=$(ls "$PROJ/.claude/.simplify-ignore-cache"/*.superseded.* 2>/dev/null | head -1 || true)
-    assert_eq "$variant: the reverted session state is kept in the cache" "1" \
-      "$(grep -c 'const broken' "${KEPT:-/dev/null}")"
-  done
-else
-  printf '  skipped: git not available\n'
-fi
-
-# -- Test 19: Re-indented placeholder and modified reason expand cleanly --
-printf '\nTest 19: Re-indented placeholder and modified reason expand without syntax corruption\n'
-PROJ="$TMPDIR/rt19"; mkdir -p "$PROJ"
-RT="$PROJ/reindented.js"
-cat > "$RT" <<'EOF'
-function process(x) {
-  if (x) {
-    /* simplify-ignore-start: perf-critical */
-    const secret = 42;
-    /* simplify-ignore-end */
-    return secret;
-  }
-}
-EOF
-rt_hook_event "$PROJ" "Read" "$RT"
-# Simulate guard-clause simplification unindenting the placeholder from 4 spaces to 2 spaces
-sed 's/^    \/\* BLOCK_/  \/* BLOCK_/' "$RT" > "$PROJ/t" && cat "$PROJ/t" > "$RT"
-rt_hook_event "$PROJ" "Edit" "$RT" 2>/dev/null
-rt_hook_event "$PROJ" "" "" 2>/dev/null
-assert_eq "unindented block restores secret" "1" "$(grep -c 'const secret = 42;' "$RT" || true)"
-assert_eq "no duplicated comment prefix after unindent" "0" "$(grep -c '/\*.*\/\* simplify-ignore-start' "$RT" || true)"
-assert_eq "no stray reason suffix after simplify-ignore-end" "0" "$(grep -c 'simplify-ignore-end \*/:' "$RT" || true)"
-
-PROJ2="$TMPDIR/rt19b"; mkdir -p "$PROJ2"
-RT2="$PROJ2/modreason.js"
-cat > "$RT2" <<'EOF'
 /* simplify-ignore-start: perf-critical */
-const fast = 1;
+// manually unrolled XOR
+result[0] = buf[0] ^ key[0] && flag;
+const re = /\d+\\/; const amp = '$&';
 /* simplify-ignore-end */
-// simplify-ignore-start: keep-loop
-const loop = 2;
-// simplify-ignore-end
+function keep() { return a; }
 EOF
-cp "$RT2" "$PROJ2/modreason.orig"
-rt_hook_event "$PROJ2" "Read" "$RT2"
-sed 's/perf-critical/updated-reason/; s/keep-loop/changed-reason/' "$RT2" > "$PROJ2/t" && cat "$PROJ2/t" > "$RT2"
-rt_hook_event "$PROJ2" "" "" 2>/dev/null
-if cmp -s "$RT2" "$PROJ2/modreason.orig"; then
-  assert_eq "modified reason in block and line comments restores original bytes" "identical" "identical"
-else
-  assert_eq "modified reason in block and line comments restores original bytes" "identical" "differs"
-fi
+H=$(printf '%s' "$(sed -n '2,6p' "$SRC")" | sha1)
+PH="/* BLOCK_${H}: perf-critical */"
 
-# Ensure modified-reason block comment on a line with a second block comment does not greedily eat trailing code
-RT3="$PROJ2/inline-second-comment.js"
-printf '/* simplify-ignore-start: r1 */ const p = 1; /* simplify-ignore-end */\n' > "$RT3"
-rt_hook_event "$PROJ2" "Read" "$RT3"
-sed 's/r1/r2/; s|$| const keepInline = 9; /* trailing comment */|' "$RT3" > "$PROJ2/t" && cat "$PROJ2/t" > "$RT3"
-rt_hook_event "$PROJ2" "" "" 2>/dev/null
-assert_eq "trailing code before second block comment preserved" "1" "$(grep -c 'const keepInline = 9; /\* trailing comment \*/' "$RT3" || true)"
+# ── Test 1: Read shows placeholders, never the protected code ────────────
+printf 'Test 1: PostToolUse Read returns a filtered view\n'
+mk_read "$SRC"; run_hook "read"
+assert_eq "view replaces the block with one placeholder line" \
+  "$(printf 'const a = 1;\n%s\nfunction keep() { return a; }\n' "$PH"; printf x)" \
+  "$(out 'o.hookSpecificOutput.updatedToolOutput.file.content'; printf x)"
+assert_not_contains "protected code absent from the view" "manually unrolled" "$(out 'o.hookSpecificOutput.updatedToolOutput.file.content')"
+assert_eq "numLines counts the view lines" "4" "$(out 'o.hookSpecificOutput.updatedToolOutput.file.numLines')"
+assert_eq "output keeps the Read tool's shape" "text" "$(out 'o.hookSpecificOutput.updatedToolOutput.type')"
+assert_contains "model is told how placeholders work" "Edit cannot match a placeholder line" "$(out 'o.hookSpecificOutput.additionalContext')"
+assert_eq "no cache directory created" "no" "$([ -e "$PROJ/.claude" ] && echo yes || echo no)"
 
-# -- Test 20: Missing .lock in Stop and malformed JSON during active session --
-printf '\nTest 20: Missing lock dir in Stop and malformed JSON during active session\n'
-PROJ="$TMPDIR/rt20"; mkdir -p "$PROJ"
-RTA="$PROJ/a.js"
-RTB="$PROJ/b.js"
-printf '// simplify-ignore-start\nconst a = 1;\n// simplify-ignore-end\n' > "$RTA"
-printf '// simplify-ignore-start\nconst b = 2;\n// simplify-ignore-end\n' > "$RTB"
-rt_hook_event "$PROJ" "Read" "$RTA"
-rt_hook_event "$PROJ" "Read" "$RTB"
+# ── Test 2: Single-line block ─────────────────────────────────────────────
+printf '\nTest 2: Single-line block (start+end on same line)\n'
+F="$PROJ/single.js"
+printf 'const a = 1;\n/* simplify-ignore-start */ const secret = 42; /* simplify-ignore-end */\nconst b = 2;\n' > "$F"
+H2=$(printf '%s' '/* simplify-ignore-start */ const secret = 42; /* simplify-ignore-end */' | sha1)
+mk_read "$F"; run_hook "single-line read"
+assert_eq "one placeholder, neighbours kept" \
+  "$(printf 'const a = 1;\n/* BLOCK_%s */\nconst b = 2;\n' "$H2"; printf x)" \
+  "$(out 'o.hookSpecificOutput.updatedToolOutput.file.content'; printf x)"
 
-# Missing lock directories must not abort Stop under set -e before restoring b.js
-rm -rf "$PROJ/.claude/.simplify-ignore-cache"/*.lock
-stop_rc=0
-rt_hook_event "$PROJ" "" "" || stop_rc=$?
-assert_eq "Stop exits 0 when .lock dir is missing" "0" "$stop_rc"
-assert_eq "second file b.js restored by Stop" "1" "$(grep -c 'const b = 2;' "$RTB" || true)"
+# ── Test 3: Comment styles keep their syntax ─────────────────────────────
+printf '\nTest 3: Comment styles\n'
+F="$PROJ/tuned.py"
+printf 'x = 1\n# simplify-ignore-start: tuned\ny = x ** 2\n# simplify-ignore-end\n' > "$F"
+mk_read "$F"; run_hook "python read"
+assert_contains "python placeholder uses #" "# BLOCK_" "$(out 'o.hookSpecificOutput.updatedToolOutput.file.content')"
+assert_contains "reason kept" ": tuned" "$(out 'o.hookSpecificOutput.updatedToolOutput.file.content')"
+F="$PROJ/page.html"
+printf '<p>a</p>\n<!-- simplify-ignore-start -->\n<b>x</b>\n<!-- simplify-ignore-end -->\n' > "$F"
+mk_read "$F"; run_hook "html read"
+assert_contains "html placeholder keeps the closer" " -->" "$(out 'o.hookSpecificOutput.updatedToolOutput.file.content' | grep BLOCK_)"
+assert_contains "html placeholder keeps the opener" "<!-- BLOCK_" "$(out 'o.hookSpecificOutput.updatedToolOutput.file.content')"
 
-# Malformed JSON mid-session must not trigger the Stop handler and wipe backups
-rt_hook_event "$PROJ" "Read" "$RTA"
-printf 'NOT_JSON{{{' | CLAUDE_PROJECT_DIR="$PROJ" bash hooks/simplify-ignore.sh 2>/dev/null || true
-assert_eq "active session placeholder survives malformed JSON" "1" "$(grep -c 'BLOCK_' "$RTA" || true)"
-rt_hook_event "$PROJ" "" "" || true
+# ── Test 4: Identical blocks share one placeholder ───────────────────────
+printf '\nTest 4: Multiple and identical blocks\n'
+F="$PROJ/twice.js"
+printf '// simplify-ignore-start\nx();\n// simplify-ignore-end\nmid();\n// simplify-ignore-start\nx();\n// simplify-ignore-end\n' > "$F"
+mk_read "$F"; run_hook "two identical blocks"
+assert_eq "two placeholder lines" "2" "$(out 'o.hookSpecificOutput.updatedToolOutput.file.content' | grep -c BLOCK_)"
+assert_eq "one hash for both" "1" "$(out 'o.hookSpecificOutput.updatedToolOutput.file.content' | grep -o 'BLOCK_[0-9a-f]*' | sort -u | wc -l | tr -d ' ')"
 
-# -- Test 21: SQL/Lua double-dash comments do not emit false deletion warning --
-printf '\nTest 21: Double-dash comments expand without false deletion warning\n'
-PROJ="$TMPDIR/rt21"; mkdir -p "$PROJ"
-RTSQL="$PROJ/query.sql"
-printf 'SELECT 1;\n-- simplify-ignore-start: index-hint\nSELECT 2;\n-- simplify-ignore-end\n' > "$RTSQL"
-rt_hook_event "$PROJ" "Read" "$RTSQL"
-sql_warn=$(rt_hook_event "$PROJ" "" "" 2>&1)
-assert_eq "no false deleted warning on -- comment block" "0" "$(printf '%s' "$sql_warn" | grep -c 'was deleted by model' || true)"
-assert_eq "SQL protected block restored" "1" "$(grep -c 'SELECT 2;' "$RTSQL" || true)"
+# ── Test 5: Unclosed block is shown and flagged ───────────────────────────
+printf '\nTest 5: Unclosed block\n'
+F="$PROJ/unclosed.js"
+printf 'a();\n// simplify-ignore-start\nb();\n' > "$F"
+mk_read "$F"; run_hook "unclosed read"
+assert_eq "content shown as-is" "$(cat "$F"; printf x)" "$(out 'o.hookSpecificOutput.updatedToolOutput.file.content'; printf x)"
+assert_contains "warning reaches the model" "unclosed simplify-ignore-start" "$(out 'o.hookSpecificOutput.additionalContext')"
 
-else
-  printf '\nTests 14-21 skipped: jq not available (hook no-ops without it)\n'
-fi
+# ── Test 6: A partial Read that starts inside a block ────────────────────
+printf '\nTest 6: Partial Read (offset/limit inside a block)\n'
+mk_read "$SRC" 3 2; run_hook "partial read"
+assert_eq "only the placeholder is shown" "$PH" "$(out 'o.hookSpecificOutput.updatedToolOutput.file.content')"
+assert_eq "startLine kept" "3" "$(out 'o.hookSpecificOutput.updatedToolOutput.file.startLine')"
 
-# ── Summary ──────────────────────────────────────────────────────────────
+# ── Test 7-9: Pass-through cases ─────────────────────────────────────────
+printf '\nTest 7: File without markers passes through\n'
+F="$PROJ/plain.js"; printf 'plain();\n' > "$F"
+mk_read "$F"; run_hook "plain read"
+assert_eq "no answer" "" "$(cat "$OUT")"
+
+printf '\nTest 8: The hook'"'"'s own files stay readable\n'
+F="$PROJ/SIMPLIFY-IGNORE.md"; printf '/* simplify-ignore-start */\nexample\n/* simplify-ignore-end */\n' > "$F"
+mk_read "$F"; run_hook "self-excluded read"
+assert_eq "no answer" "" "$(cat "$OUT")"
+
+printf '\nTest 9: Non-text Read results pass through\n'
+node -e 'const [f,cwd]=process.argv.slice(1);process.stdout.write(JSON.stringify({hook_event_name:"PostToolUse",tool_name:"Read",cwd,tool_input:{file_path:f},tool_response:{type:"image",file:{base64:"AA=="}}}))' "$SRC" "$PROJ" > "$IN"
+run_hook "image read"
+assert_eq "no answer" "" "$(cat "$OUT")"
+
+# ── Test 10: Write with placeholders kept is expanded ────────────────────
+printf '\nTest 10: PreToolUse Write expands placeholders\n'
+printf 'const a = 1;\n%s\nfunction kept() { return a; }\n' "$PH" > "$TMP/new.js"
+sed 's/function keep()/function kept()/' "$SRC" > "$TMP/expected.js"
+mk_write "$SRC" "$TMP/new.js"; run_hook "write"
+out 'o.hookSpecificOutput.updatedInput.content' > "$TMP/written.js"
+assert_same_file "updatedInput restores the real block around the model's change" "$TMP/expected.js" "$TMP/written.js"
+assert_eq "file_path unchanged in updatedInput" "$SRC" "$(out 'o.hookSpecificOutput.updatedInput.file_path')"
+assert_eq "no permission decision (host prompts still apply)" "" "$(out 'o.hookSpecificOutput.permissionDecision')"
+
+# ── Test 11: Re-indented placeholder or edited reason still expands ──────
+printf '\nTest 11: Fuzzy placeholder expansion\n'
+printf 'const a = 1;\n    /* BLOCK_%s: changed reason */\nfunction keep() { return a; }\n' "$H" > "$TMP/fuzzy.js"
+mk_write "$SRC" "$TMP/fuzzy.js"; run_hook "fuzzy write"
+out 'o.hookSpecificOutput.updatedInput.content' > "$TMP/written.js"
+assert_same_file "block restored verbatim" "$SRC" "$TMP/written.js"
+
+# ── Test 12: A Write that drops a placeholder is denied ──────────────────
+printf '\nTest 12: Write that drops protected code\n'
+printf 'const a = 1;\nfunction keep() { return a; }\n' > "$TMP/dropped.js"
+mk_write "$SRC" "$TMP/dropped.js"; run_hook "dropping write"
+assert_eq "denied" "deny" "$(out 'o.hookSpecificOutput.permissionDecision')"
+assert_contains "names the placeholder to keep" "$PH" "$(out 'o.hookSpecificOutput.permissionDecisionReason')"
+
+# ── Test 13: Placeholders from another file are refused ──────────────────
+printf '\nTest 13: Write that moves a block to another file\n'
+printf 'moved();\n%s\n' "$PH" > "$TMP/moved.js"
+mk_write "$PROJ/other.js" "$TMP/moved.js"; run_hook "foreign write"
+assert_eq "denied" "deny" "$(out 'o.hookSpecificOutput.permissionDecision')"
+assert_contains "explains the move" "cannot be moved between files" "$(out 'o.hookSpecificOutput.permissionDecisionReason')"
+
+# ── Test 14-16: Edit ──────────────────────────────────────────────────────
+printf '\nTest 14: Edit outside protected code is untouched\n'
+printf 'function keep()' > "$TMP/old"; printf 'function kept()' > "$TMP/new"
+mk_edit "$SRC" "$TMP/old" "$TMP/new"; run_hook "edit"
+assert_eq "no answer, host applies the edit" "" "$(cat "$OUT")"
+
+printf '\nTest 15: Edit that reaches into protected code is denied\n'
+printf 'key' > "$TMP/old"; printf 'k2' > "$TMP/new"
+mk_edit "$SRC" "$TMP/old" "$TMP/new" all; run_hook "replace_all edit"
+assert_eq "replace_all into a block denied" "deny" "$(out 'o.hookSpecificOutput.permissionDecision')"
+assert_contains "names the block" "BLOCK_$H" "$(out 'o.hookSpecificOutput.permissionDecisionReason')"
+printf 'buf[0]' > "$TMP/old"
+mk_edit "$SRC" "$TMP/old" "$TMP/new"; run_hook "single edit inside a block"
+assert_eq "single edit into a block denied" "deny" "$(out 'o.hookSpecificOutput.permissionDecision')"
+
+printf '\nTest 16: Edit whose new_string carries a placeholder is expanded\n'
+printf 'function keep() { return a; }' > "$TMP/old"
+printf 'function keep() { return a; }\n%s' "$PH" > "$TMP/new"
+mk_edit "$SRC" "$TMP/old" "$TMP/new"; run_hook "edit with placeholder"
+assert_contains "new_string carries the real block" "manually unrolled XOR" "$(out 'o.hookSpecificOutput.updatedInput.new_string')"
+assert_not_contains "no placeholder left" "BLOCK_" "$(out 'o.hookSpecificOutput.updatedInput.new_string')"
+
+# ── Test 17: Stop restores nothing because nothing changed ───────────────
+printf '\nTest 17: Stop\n'
+mk_event Stop; run_hook "stop"
+assert_eq "no answer" "" "$(cat "$OUT")"
+printf '{}' > "$IN"; run_hook "manual recovery call (echo {} | hook)"
+mkdir -p "$PROJ/.claude/.simplify-ignore-cache"
+printf 'old backup\n' > "$PROJ/.claude/.simplify-ignore-cache/abc.bak"
+mk_event Stop; run_hook "stop with leftovers from the in-place hook"
+assert_contains "leftovers reported, not restored" "old in-place version" "$(cat "$ERR")"
+rm -rf "$PROJ/.claude"
+
+# ── Test 18-19: Old configuration and bad input are harmless ─────────────
+printf '\nTest 18: Events from the old in-place configuration\n'
+node -e 'const [f,cwd]=process.argv.slice(1);process.stdout.write(JSON.stringify({hook_event_name:"PreToolUse",tool_name:"Read",cwd,tool_input:{file_path:f}}))' "$SRC" "$PROJ" > "$IN"
+run_hook "PreToolUse Read"
+assert_eq "no answer" "" "$(cat "$OUT")"
+assert_contains "points at the new configuration" "PostToolUse Read" "$(cat "$ERR")"
+
+printf '\nTest 19: Malformed hook input\n'
+printf 'not json' > "$IN"; run_hook "malformed input"
+assert_contains "diagnostic on stderr" "could not parse hook input" "$(cat "$ERR")"
+
+# ── Test 20: CRLF files round-trip exactly ───────────────────────────────
+printf '\nTest 20: CRLF line endings\n'
+F="$PROJ/crlf.js"
+printf 'a();\r\n// simplify-ignore-start\r\nsecret();\r\n// simplify-ignore-end\r\nb();\r\n' > "$F"
+mk_read "$F"; run_hook "crlf read"
+out 'o.hookSpecificOutput.updatedToolOutput.file.content' > "$TMP/view.js"
+assert_not_contains "block hidden" "secret" "$(cat "$TMP/view.js")"
+mk_write "$F" "$TMP/view.js"; run_hook "crlf write of the unchanged view"
+if [ -s "$OUT" ]; then out 'o.hookSpecificOutput.updatedInput.content' > "$TMP/written.js"; else cp "$TMP/view.js" "$TMP/written.js"; fi
+assert_same_file "expanded view equals the real file" "$F" "$TMP/written.js"
+
+# ── Test 21: Missing node degrades to a harmless no-op ───────────────────
+printf '\nTest 21: Missing node\n'
+mkdir -p "$TMP/empty-path"
+mk_read "$SRC"
+BEFORE=$(snapshot); RC=0
+PATH="$TMP/empty-path" "$BASH" "$HOOK" < "$IN" > "$OUT" 2> "$ERR" || RC=$?
+assert_eq "exit 0" "0" "$RC"
+assert_contains "diagnostic names node" "node is required" "$(cat "$ERR")"
+assert_eq "every project file's sha256 unchanged" "$BEFORE" "$(snapshot)"
+
+# ── Test 22: Full lifecycle ──────────────────────────────────────────────
+printf '\nTest 22: Read -> Write -> Read -> Stop lifecycle\n'
+cp "$SRC" "$TMP/original.js"
+mk_read "$SRC"; run_hook "lifecycle read"
+out 'o.hookSpecificOutput.updatedToolOutput.file.content' | sed 's/return a;/return a + 1;/' > "$TMP/model.js"
+mk_write "$SRC" "$TMP/model.js"; run_hook "lifecycle write"
+out 'o.hookSpecificOutput.updatedInput.content' > "$TMP/host-writes.js"
+cp "$TMP/host-writes.js" "$SRC"   # the host's Write tool, not the hook, writes the file
+sed 's/return a;/return a + 1;/' "$TMP/original.js" > "$TMP/expected.js"
+assert_same_file "file holds the model's change and the untouched block" "$TMP/expected.js" "$SRC"
+mk_read "$SRC"; run_hook "lifecycle re-read"
+assert_contains "same placeholder after the write" "$PH" "$(out 'o.hookSpecificOutput.updatedToolOutput.file.content')"
+mk_event Stop; run_hook "lifecycle stop"
+assert_same_file "Stop leaves the file as the host wrote it" "$TMP/expected.js" "$SRC"
+
 printf '\n══════════════════════════════════════════\n'
 printf 'Results: %d passed, %d failed\n' "$PASS" "$FAIL"
-[ "$FAIL" -eq 0 ] && exit 0 || exit 1
+[ "$FAIL" -eq 0 ]
