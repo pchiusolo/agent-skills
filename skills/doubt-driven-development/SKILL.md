@@ -41,10 +41,10 @@ If you doubt every keystroke, you ship nothing. The skill applies only to non-tr
 
 ## Loading Constraints
 
-This skill is designed for the **main-session orchestrator**, where Step 3 (DOUBT, detailed below) can spawn a fresh-context reviewer.
+This skill is designed for the **main-session orchestrator** (the user's main session, or an authorized Project Lead under an engagement; see `../../references/autonomous-delivery-contract.md`), where Step 3 (DOUBT, detailed below) can spawn a fresh-context reviewer.
 
 - **Do NOT add this skill to a persona's `skills:` frontmatter.** A persona that follows Step 3 would spawn another persona — the orchestration anti-pattern explicitly forbidden by `../../references/orchestration-patterns.md` ("personas do not invoke other personas").
-- **If you find yourself applying this skill from inside a subagent context** (where Claude Code prevents nested subagent spawn): the preferred path is to surface to the user that doubt-driven cannot run nested and let the main session handle it. As a last resort only, a degraded self-questioning fallback exists — rewrite ARTIFACT + CONTRACT as a fresh self-prompt with a hard mental separator from your prior reasoning, and walk Steps 1–5. This is **not fresh-context review** (you carry your own context with you), so flag the result as degraded and prefer escalation whenever the user is reachable.
+- **If you find yourself applying this skill from inside a subagent context** (where Claude Code prevents nested subagent spawn): surface that doubt-driven cannot run nested and hand the doubt step back to the main session (under an engagement, ask the Project Lead to admit a fresh-context reviewer). A self-questioning pass (re-reading ARTIFACT + CONTRACT as a fresh self-prompt) may still catch something, but it is **not fresh-context review**: it never satisfies Step 3 and never counts as independent review. Label it "self-check, not independent" and record the doubt cycle as incomplete ("fresh-context review unavailable") until a real reviewer runs.
 
 ## The Process
 
@@ -109,13 +109,17 @@ CONTRACT: <paste contract>
 
 In Claude Code, the role-based reviewers in `agents/` start with isolated context by design and are usable here — see `agents/` for the roster and per-domain match.
 
+Under an engagement, spawning the reviewer is an agent-creation request: get the Project Lead's admission and queue the cycle when no slot is free. If no fresh-context reviewer can run at all, the cycle is blocked; do not substitute self-review.
+
 **The adversarial prompt above takes precedence over the persona's default response shape.** Personas like `code-reviewer` are written to produce balanced verdicts with both strengths and weaknesses; doubt-driven needs issues-only output. Paste the adversarial prompt verbatim into the invocation so it overrides the persona's default. If a persona's response shape can't be overridden cleanly, fall back to a generic subagent with the adversarial prompt.
 
 #### Cross-model escalation
 
 A single-model reviewer shares blind spots with the original author — a colder, different-architecture model catches them. Doubt-driven is already opt-in for non-trivial decisions, so within that scope offering cross-model is part of the skill's value, not optional friction.
 
-**Interactive sessions: always offer. Never silently skip.**
+**Under an engagement: the contract decides.** Do not ask about cross-model every cycle. If the contract's provider and model allowlist names a cross-model reviewer, use it (after the Lead's admission) with the invocation recorded in the contract or the engagement record, applying the Step 2 checks below; the recorded invocation stands in for item 3. If the allowlist names none, or the allowed one is unreachable, write *"Cross-model unavailable: <reason>"* in the output and the engagement record, then continue to RECONCILE. Never invoke a provider or model the allowlist does not name.
+
+**Interactive sessions without an engagement: always offer. Never silently skip.**
 
 **Step 1: Ask the user**
 
@@ -123,7 +127,7 @@ After the single-model review in Step 3 above, but before RECONCILE, pause and a
 
 > *"Single-model review complete. Want a cross-model second opinion? Options: Gemini CLI, Codex CLI, manual external review (you paste it elsewhere), or skip."*
 
-This question is mandatory in every interactive doubt cycle — even on artifacts that feel low-stakes. The user — not the agent — decides whether the cost is worth it. The agent's job is to surface the choice.
+This question is mandatory in every interactive doubt cycle outside an engagement — even on artifacts that feel low-stakes. The user — not the agent — decides whether the cost is worth it. The agent's job is to surface the choice.
 
 **Step 2: If the user picks a CLI — verify, then invoke**
 
@@ -160,12 +164,12 @@ Surface the failure explicitly. Offer: run it manually, try a different tool, or
 
 Acknowledge the skip in the output (*"Proceeding with single-model findings only"*) and continue to RECONCILE. Skipping is fine; silent skipping is not.
 
-**Non-interactive contexts** (CI, `/loop`, autonomous-loop, scheduled runs):
+**Non-interactive contexts without an engagement** (CI, `/loop`, autonomous-loop, scheduled runs):
 
 - Cross-model is **skipped**, and the skip must be **announced** in the output: *"Cross-model skipped: non-interactive context."*
-- **Never invoke an external CLI without explicit user authorization** — this is a load-bearing safety property.
+- **Never invoke an external CLI without explicit user authorization** — this is a load-bearing safety property. (Under an engagement, an allowlist entry in the accepted contract is that authorization; nothing else is.)
 
-Cross-model adds cost, latency, and tool fragility. The agent surfaces the choice every cycle; the user decides whether this artifact warrants it.
+Cross-model adds cost, latency, and tool fragility. The agent surfaces the choice every interactive cycle; the user (or, under an engagement, the contract) decides whether this artifact warrants it.
 
 ### Step 4: RECONCILE — Fold findings back
 
@@ -185,8 +189,8 @@ A fresh reviewer can be wrong because it lacks context. Don't defer just because
 Stop when:
 
 - Next iteration returns only trivial or already-considered findings, **or**
-- 3 cycles completed (escalate to user, don't grind a fourth alone), **or**
-- User explicitly says "ship it"
+- 3 cycles completed (escalate to the user, or under an engagement record it for the owner; don't grind a fourth alone), **or**
+- User explicitly says "ship it" (under an engagement, the owner, as a recorded decision)
 
 If after 3 cycles the reviewer still surfaces substantive issues, the artifact may not be ready. Surface this to the user — three unresolved cycles is information about the artifact, not a reason to keep looping.
 
@@ -203,8 +207,9 @@ If 3 cycles is "obviously insufficient" because the artifact is large: the artif
 | "If I doubt every step I'll never ship" | The skill applies to non-trivial decisions, not every keystroke. Re-read "When NOT to Use." |
 | "Two opinions are always better than one" | Not when the second has less context and produces noise. Reconcile, don't defer. |
 | "The reviewer disagreed so I was wrong" | The reviewer lacks your context — disagreement is information, not verdict. Re-read the artifact, classify, then decide. |
-| "Cross-model is always better" | Cross-model catches blind spots a single model shares with itself, but it adds cost and tool fragility. Offer it every interactive doubt cycle — the user decides whether the artifact warrants it. The agent's job is to surface the choice, not to gate it. |
-| "User said yes once, so I can keep invoking the CLI" | Each invocation is its own authorization. The artifact, the prompt, and the flags change between calls — re-confirm the exact command with the user before every run. |
+| "Cross-model is always better" | Cross-model catches blind spots a single model shares with itself, but it adds cost and tool fragility. Offer it every interactive doubt cycle — the user decides whether the artifact warrants it. The agent's job is to surface the choice, not to gate it. Under an engagement, the contract's allowlist decides instead. |
+| "User said yes once, so I can keep invoking the CLI" | Each invocation is its own authorization. The artifact, the prompt, and the flags change between calls — re-confirm the exact command with the user before every run. Under an engagement, the contract's allowlist and recorded invocation are the standing authorization, and the exact command is still checked before each run. |
+| "A careful self-review is as good as a fresh one" | It carries the same context and blind spots. It never counts as Step 3 or as independent review; record the cycle as incomplete until a fresh-context reviewer runs. |
 
 ## Red Flags
 
@@ -219,6 +224,8 @@ If 3 cycles is "obviously insufficient" because the artifact is large: the artif
 - Hardcoding an external CLI invocation without confirming with the user that the tool exists, is configured, and accepts that exact syntax
 - **Silently skipping cross-model in an interactive doubt cycle.** Even when not recommending it, the offer must be visible. Skipping is fine; silent skipping is not.
 - Falling back silently when an external CLI errors or is missing — surface the failure and let the user redirect
+- Reporting a self-questioning pass or a same-context persona pass as fresh-context review
+- Under an engagement, asking about cross-model every cycle instead of reading the contract's allowlist, or invoking a provider it does not name
 - Stripping the contract from the reviewer's input
 - Passing the CLAIM to the reviewer (biases toward agreement)
 
@@ -228,7 +235,7 @@ If 3 cycles is "obviously insufficient" because the artifact is large: the artif
 - **`source-driven-development`**: SDD verifies *facts about frameworks* against official docs. Doubt-driven verifies *your reasoning about the artifact*. SDD checks the API exists; doubt-driven checks you used it correctly under the contract.
 - **`test-driven-development`**: TDD's RED step is doubt made concrete — a failing test is a disproof attempt. When TDD applies, that failing test *is* the doubt step for behavioral claims.
 - **`debugging-and-error-recovery`**: when the reviewer surfaces a real failure mode, drop into the debugging skill to localize and fix.
-- **Repo orchestration rules** (`../../references/orchestration-patterns.md`): this skill orchestrates from the main session. A persona calling another persona is anti-pattern B — see Loading Constraints above.
+- **Repo orchestration rules** (`../../references/orchestration-patterns.md`): this skill orchestrates from the main session or an authorized Project Lead. A persona calling another persona is anti-pattern B — see Loading Constraints above.
 
 ## Verification
 
@@ -240,6 +247,8 @@ After applying doubt-driven development:
 - [ ] The reviewer's prompt was adversarial ("find issues"), not validating ("is it good")
 - [ ] Findings were classified against the artifact text (not rubber-stamped) using the precedence: contract misread / actionable / trade-off / noise
 - [ ] A stop condition was met (trivial findings, 3 cycles, or user override)
-- [ ] In interactive mode, cross-model was **explicitly offered** to the user (regardless of artifact stakes) and the response was acknowledged in the output
-- [ ] In non-interactive mode, cross-model was skipped and the skip was announced
-- [ ] Any external CLI invocation was preceded by a PATH check, a working-binary test, syntax confirmation with the user, and explicit authorization to run
+- [ ] No self-questioning or same-context pass was counted as the fresh-context review; a cycle without one is recorded as incomplete
+- [ ] In interactive mode without an engagement, cross-model was **explicitly offered** to the user (regardless of artifact stakes) and the response was acknowledged in the output
+- [ ] In non-interactive mode without an engagement, cross-model was skipped and the skip was announced
+- [ ] Under an engagement, cross-model followed the contract's provider and model allowlist, or "cross-model unavailable" was recorded
+- [ ] Any external CLI invocation was preceded by a PATH check, a working-binary test, syntax confirmation with the user (or the contract's recorded invocation), and explicit authorization to run (the user's, or the contract allowlist's)

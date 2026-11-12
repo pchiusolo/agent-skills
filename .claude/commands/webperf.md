@@ -19,6 +19,8 @@ disable-model-invocation: true
 
 ## Run the audit
 
+Under an engagement (see `references/autonomous-delivery-contract.md`), spawning the auditor is an agent-creation request: get the Project Lead's admission first and queue the audit if no slot is free.
+
 Spawn the `web-performance-auditor` subagent. Pass it explicitly:
 
 - The files, components, or diff under review
