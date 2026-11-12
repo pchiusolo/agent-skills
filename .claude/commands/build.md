@@ -10,7 +10,7 @@ Invoke the `incremental-implementation` skill alongside `test-driven-development
 - **`/build`** — implement the *next* pending task, then stop (careful, one slice at a time).
 - **`/build auto`** — generate the plan if needed, get a single approval, then implement *every* task without stopping between them.
 
-`$ARGUMENTS` selects the mode. Treat `auto` (canonical) or `all` as autonomous mode; anything else (or empty) is the default single-task mode. Note: autonomous mode is not faster *per task* — it runs the same test-driven loop — it only removes the human stepping *between* tasks.
+`$ARGUMENTS` selects the mode. Treat a first word of `auto` (canonical) or `all` as autonomous mode; anything else (or empty) is the default single-task mode. Any other word is a module id (see "Resolve the artifacts"). Note: autonomous mode is not faster *per task* — it runs the same test-driven loop — it only removes the human stepping *between* tasks.
 
 ## Under an engagement
 
