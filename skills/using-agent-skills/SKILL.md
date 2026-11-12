@@ -69,6 +69,8 @@ When you encounter inconsistencies, conflicting requirements, or unclear specifi
 3. Present the tradeoff or ask the clarifying question.
 4. Wait for resolution before continuing.
 
+Under an engagement (see `../../references/autonomous-delivery-contract.md`), check the durable engagement record before asking: a conflict the contract or a recorded owner answer already resolves is not re-asked. One that only the owner can resolve is recorded for the owner and blocks that line of work; the waiting happens there, and you never pick an answer on the owner's behalf.
+
 **Bad:** Silently picking one interpretation and hoping it's right.
 **Good:** "I see X in the spec but Y in the existing code. Which takes precedence?"
 

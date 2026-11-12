@@ -62,6 +62,8 @@ If you can't name the trust boundaries for a feature, you're not ready to secure
 - Modifying rate limiting or throttling
 - Granting elevated permissions or roles
 
+Under an engagement (see `../../references/autonomous-delivery-contract.md`), these stay reserved owner decisions unless the contract's autonomous actions name that exact change. Check the durable record first and do not re-ask a recorded approval; otherwise record the request for the owner and block that change. The Always Do and Never Do lists apply unchanged under any contract, and no contract approves bypassing a host permission prompt.
+
 ### Never Do
 
 - **Never commit secrets** to version control (API keys, passwords, tokens)

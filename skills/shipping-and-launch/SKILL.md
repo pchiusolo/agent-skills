@@ -17,6 +17,8 @@ Ship with confidence. The goal is not just to deploy — it's to deploy safely, 
 - Opening a beta or early access program
 - Any deployment that carries risk (all of them)
 
+**Under an engagement** (see `../../references/autonomous-delivery-contract.md`), deploying, releasing, migrating data, and anything irreversible are reserved owner decisions unless the contract names that exact action and target. Check the durable record first: a recorded owner GO is not re-asked; without one, prepare the checklist, the rollback plan, and the verdict, record them for the owner, and stop before acting. Even an authorized deploy keeps every gate below, and host permission prompts still apply.
+
 ## The Pre-Launch Checklist
 
 ### Code Quality
@@ -24,7 +26,7 @@ Ship with confidence. The goal is not just to deploy — it's to deploy safely, 
 - [ ] All tests pass (unit, integration, e2e)
 - [ ] Build succeeds with no warnings
 - [ ] Lint and type checking pass
-- [ ] Code reviewed and approved
+- [ ] Code reviewed and approved at the exact revision being shipped, by a human reviewer or a fresh-context agent reviewer (see the Definition of Done's evidence at the final revision); the author session reviewing its own work does not count
 - [ ] No TODO comments that should be resolved before launch
 - [ ] No `console.log` debugging statements in production code
 - [ ] Error handling covers expected failure modes

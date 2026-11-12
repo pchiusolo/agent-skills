@@ -225,6 +225,8 @@ Human makes the final call
 
 This catches issues that a single model might miss — different models have different blind spots.
 
+Model B counts as an independent reviewer only when it runs in a fresh context at the exact revision under review. Under an engagement (see `../../references/autonomous-delivery-contract.md`), it must also come from the contract's provider and model allowlist and be admitted by the Project Lead, and the human's final call is the owner's reserved merge decision.
+
 **Example prompt for a review agent:**
 ```
 Review this code change for correctness, security, and adherence to
