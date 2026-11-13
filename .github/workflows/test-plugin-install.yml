@@ -187,8 +187,21 @@ jobs:
       - name: Verify installed revision
         run: |
           want=$(node -p "require('./.claude-plugin/plugin.json').version")
-          claude plugin list | tee plugins.txt
-          grep -A3 'agent-skills@pchiusolo-agent-skills' plugins.txt | grep -q "Version: $want"
+          claude plugin list | tee "$RUNNER_TEMP/plugins.txt"
+          grep -A3 'agent-skills@pchiusolo-agent-skills' "$RUNNER_TEMP/plugins.txt" | grep -q "Version: $want"
+          echo "copies found:"; find ~/.claude/plugins -path '*agent-skills*' -name autonomous-delivery-contract.md
           installed=$(find ~/.claude/plugins -path '*agent-skills*' -name autonomous-delivery-contract.md -print -quit)
           test -n "$installed" || { echo "installed copy lacks references/autonomous-delivery-contract.md"; exit 1; }
-          cmp "$installed" references/autonomous-delivery-contract.md
+          root=$(dirname "$(dirname "$installed")")
+          echo "installed copy: $root"
+          # Every git-tracked regular file of this checkout must be byte-identical in the installed copy.
+          node -e '
+            const { execFileSync } = require("child_process"); const fs = require("fs"); const path = require("path");
+            const root = process.argv[1]; let n = 0, bad = 0;
+            for (const rec of execFileSync("git", ["ls-files", "-s", "-z"]).toString().split("\0").filter(Boolean)) {
+              const [meta, p] = rec.split("\t"); if (meta.startsWith("120000")) continue; n++;
+              let b = null; try { b = fs.readFileSync(path.join(root, p)); } catch {}
+              if (!b || !b.equals(fs.readFileSync(p))) { console.log("differs:", p); bad++; }
+            }
+            console.log("compared", n, "tracked files; differing", bad); process.exit(bad ? 1 : 0);
+          ' "$root"
