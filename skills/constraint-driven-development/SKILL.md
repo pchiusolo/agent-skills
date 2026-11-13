@@ -37,6 +37,8 @@ Apply this skill when:
 
 The interview needs a live user. **Don't run it in non-interactive contexts** (CI, `/loop`, autonomous runs). If constraints are missing and you're in one of those, apply the Floor below, note that you did, and flag the rest for a human.
 
+Under an engagement (see `../../references/autonomous-delivery-contract.md`), read the durable engagement record first: thresholds or dimensions the contract or a recorded owner answer already sets are used without asking again. For the rest, apply the Floor, record the open interview questions for the owner, and never invent thresholds on the owner's behalf. Changing or relaxing an existing `CONSTRAINTS.md` is an owner decision unless the contract names it; no contract makes weakening the bar to get a change through acceptable.
+
 ## The Process
 
 ### Step 1: Detect before you ask

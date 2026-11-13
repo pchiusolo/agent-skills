@@ -14,7 +14,10 @@
  *
  * What this does NOT check:
  *   Prompt body differences are intentional — each tool has its own
- *   syntax ($ARGUMENTS, agent-skills: prefixes, GEMINI.md vs CLAUDE.md).
+ *   syntax ($ARGUMENTS, subagent tooling, GEMINI.md vs CLAUDE.md). Skills are
+ *   referenced by bare name on every surface, never by a plugin namespace such
+ *   as `agent-skills:`, because the namespace changes when another plugin
+ *   vendors this library.
  *
  * Exit codes: 0 = all clear, 1 = one or more errors
  */
@@ -199,6 +202,21 @@ function main() {
       console.log(`       .claude:      ${descClaude}`);
       console.log(`       .gemini:      ${descGemini}`);
       console.log(`       commands/:    ${descAgy}`);
+      errors++;
+    }
+  }
+
+  // ── Namespace-neutral skill references ──────────────────────────────────────
+  // A hardcoded plugin namespace breaks when another plugin vendors this
+  // library under its own name; skills are named bare on every surface.
+  console.log('\nChecking skill references are namespace-neutral...');
+
+  for (const [tool, { dir, ext }] of Object.entries(DIRS)) {
+    if (!fs.existsSync(dir)) continue;
+    for (const f of fs.readdirSync(dir).filter(name => name.endsWith(ext)).sort()) {
+      const hits = fs.readFileSync(path.join(dir, f), 'utf8').match(/agent-skills:[a-z0-9-]+/g);
+      if (!hits) continue;
+      console.log(`  ✗  ${tool}/${f} — names skills through a plugin namespace: ${[...new Set(hits)].join(', ')}; use the bare skill name`);
       errors++;
     }
   }

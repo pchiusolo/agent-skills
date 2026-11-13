@@ -91,7 +91,7 @@ The at-a-glance table tells you how they are shaped. This is how to choose in pr
 - **Confidence that the skills themselves work**: agent-skills is the only one with catalog-wide evals in the repo, so a description or routing regression fails CI rather than surfacing as a mysterious "why didn't the skill fire" later.
 - **Requirements interrogation**: Pocock's grilling is the reference implementation; agent-skills' `interview-me` is close in spirit and gaining an opt-in collaborative mode.
 - **Platform spread**: agent-skills and Superpowers both run almost everywhere; Pocock is happiest on Claude Code.
-- **A human gate at each step vs. a hands-off run**: agent-skills checkpoints by default; Superpowers minimizes mid-run check-ins on purpose.
+- **A human gate at each step vs. a hands-off run**: agent-skills checkpoints by default; Superpowers minimizes mid-run check-ins on purpose. This fork can also run hands-off under an owner-accepted engagement contract ([references/autonomous-delivery-contract.md](../references/autonomous-delivery-contract.md)), which moves the checkpoints into a durable record and keeps merge, deploy, and other reserved decisions with the owner.
 
 ### Concrete scenarios
 

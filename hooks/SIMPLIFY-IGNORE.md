@@ -1,6 +1,10 @@
 # simplify-ignore hook
 
-Block-level protection for `/code-simplify`. Mark code that should never be simplified — the model won't see it.
+Block-level protection for `/code-simplify`. Mark code that should never be simplified — the model sees a placeholder instead, and edits that would change the block are refused. **The file on disk is never modified by the hook.**
+
+## Opt-in only
+
+This hook is not registered by the plugin and is never installed automatically: you add it to your own `.claude/settings.json`. It writes nothing anywhere: no cache, no backup, no temporary copy of your file. Under an autonomous engagement ([references/autonomous-delivery-contract.md](../references/autonomous-delivery-contract.md)) it stays off unless the contract enables it. The same applies to the optional [sdd-cache](SDD-CACHE.md) and session-start hooks.
 
 ## Setup
 
@@ -21,20 +25,15 @@ result[3] = buf[3] ^ key[3];
 ```json
 {
   "hooks": {
-    "PreToolUse": [
+    "PostToolUse": [
       {
         "matcher": "Read",
         "hooks": [{ "type": "command", "command": "bash \"${CLAUDE_PROJECT_DIR}/hooks/simplify-ignore.sh\"" }]
       }
     ],
-    "PostToolUse": [
+    "PreToolUse": [
       {
         "matcher": "Edit|Write",
-        "hooks": [{ "type": "command", "command": "bash \"${CLAUDE_PROJECT_DIR}/hooks/simplify-ignore.sh\"" }]
-      }
-    ],
-    "Stop": [
-      {
         "hooks": [{ "type": "command", "command": "bash \"${CLAUDE_PROJECT_DIR}/hooks/simplify-ignore.sh\"" }]
       }
     ]
@@ -42,21 +41,22 @@ result[3] = buf[3] ^ key[3];
 }
 ```
 
-3. Run `/code-simplify` — protected blocks become `/* BLOCK_de115a1d: perf-critical */` placeholders. The model reasons about surrounding code without seeing the protected implementation.
-
-> **Note:** The hook stores temporary backups in `.claude/.simplify-ignore-cache/`. Make sure this path is in your `.gitignore`.
+3. Run `/code-simplify` — protected blocks appear as `/* BLOCK_de115a1d: perf-critical */` placeholders. The model reasons about surrounding code without seeing the protected implementation.
 
 ## How it works
 
-One script, three hook events:
+One script, one decision per event. Every phase re-reads the real file and recomputes the blocks from it; nothing is stored between calls.
 
 | Event | Action |
 |---|---|
-| `PreToolUse Read` | Backs up file, replaces blocks with `BLOCK_<hash>` placeholders in-place |
-| `PostToolUse Edit\|Write` | Expands placeholders back to real code, saves model's changes, re-filters |
-| `Stop` | Expands the placeholders left in each file on disk, so changes made outside `Edit`/`Write` survive; keeps a file that was put back whole (a `git checkout`/`stash` revert, an undo) instead of the stale backup; falls back to the backup only if no placeholder is left |
+| `PostToolUse Read` | Replaces the Read result the model sees with a filtered view (`hookSpecificOutput.updatedToolOutput`): each block becomes one `BLOCK_<hash>` placeholder line, and a note explains the placeholders. The Read itself already ran on the real file |
+| `PreToolUse Write` | Expands each placeholder in the new content back into the real block (`hookSpecificOutput.updatedInput`), so the Write tool writes real code. Denies a Write that would drop a protected block, or that carries placeholders from another file |
+| `PreToolUse Edit` | Simulates the edit on the real file and denies it if it would change a protected block (for example a `replace_all` that reaches into one). Expands placeholders in `new_string` |
+| `Stop` (optional) | Nothing to restore. Only reports files left by the old in-place version of this hook |
 
-Each block is content-hashed (8 hex chars via `shasum`/`sha1sum`) so the round-trip is unambiguous even if the model duplicates or reorders placeholders. Cache is project-scoped to prevent cross-session interference.
+Each block is content-hashed (first 8 hex chars of SHA-1), so the round-trip is unambiguous even if the model duplicates or reorders placeholders. Placeholders preserve the original comment syntax (`# BLOCK_xxx` for Python, `<!-- BLOCK_xxx -->` for HTML). The hook returns no permission decision when it rewrites input, so your permission rules and prompts apply to the rewritten call as usual.
+
+Verified against Claude Code 2.1.322: `updatedToolOutput` replaces a built-in Read result, `updatedInput` rewrites a Write's content, and Edit's "string to replace not found" check runs *before* PreToolUse hooks. That last fact is why an Edit cannot target a placeholder line (see limitations).
 
 ## Annotation syntax
 
@@ -66,27 +66,24 @@ Each block is content-hashed (8 hex chars via `shasum`/`sha1sum`) so the round-t
 /* simplify-ignore-end */
 ```
 
-Any comment style works (`//`, `/*`, `#`, `<!--`). Multiple blocks per file and single-line blocks supported. Placeholders preserve the original comment syntax (e.g. `# BLOCK_xxx` for Python, `<!-- BLOCK_xxx -->` for HTML).
+Any comment style works (`//`, `/*`, `#`, `<!--`). Multiple blocks per file and single-line blocks supported.
 
-## Crash recovery
+## Upgrading from the in-place hook
 
-If Claude Code crashes without triggering the Stop hook, files on disk may still have `BLOCK_<hash>` placeholders. To restore manually:
+Earlier versions rewrote the source file on `PreToolUse Read` and restored it on `PostToolUse Edit|Write` and `Stop`. Replace that configuration with the one above; the new script ignores the old events (and says so on stderr) instead of filtering anything.
 
-```bash
-echo '{}' | bash hooks/simplify-ignore.sh
-```
-
-Backups are stored in `.claude/.simplify-ignore-cache/` within your project directory.
-If a change is reverted while the hook is active, the superseded session backup is retained there as `<id>.superseded.<pid>`; review it and remove it when it is no longer needed.
+If a session with the old version ended without its `Stop` hook running, a source file may still hold `BLOCK_<hash>` placeholders. The old version kept each original as `.claude/.simplify-ignore-cache/<id>.bak`, with the file's path in `<id>.path`. Check out the previous `hooks/simplify-ignore.sh` from git history and run `echo '{}' | bash hooks/simplify-ignore.sh` once, or copy each `.bak` back to the path beside it, then delete the directory. The new hook reports such leftovers at `Stop` but never touches them.
 
 ## Known limitations
 
-- **Single-line blocks hide the entire line.** If `simplify-ignore-start` and `simplify-ignore-end` appear on the same line as other code, the whole line is hidden from the model, not just the annotated portion. Use dedicated lines for annotations.
-- **Comment suffix detection covers `*/` and `-->` only.** Template engines with non-standard comment closers (ERB `%>`, Blade `--}}`) may produce unbalanced placeholders. Use `#` or `//` style comments instead.
-- **Fallback expansion is progressive, not exact.** If the model alters a placeholder's formatting (e.g. changes the reason text), the hook tries progressively simpler matches: full placeholder → prefix+hash+suffix → hash-only. The hash-only fallback may leave cosmetic debris (e.g. stray `:` or reason text). A warning is printed to stderr when this happens.
-- **A removed placeholder falls back to the backup.** If an edit deletes a `BLOCK_<hash>` line, or something replaces the whole file, the hook can no longer tell where that protected block belongs. An `Edit` or `Write` that does this is reported back to the model (exit 2) with the placeholder to restore, and the backup is not updated. If the placeholder is still missing at `Stop`, the hook restores the backup and prints a warning; the changed file is not lost but is kept in the cache as `.claude/.simplify-ignore-cache/<id>.recovered`, whose path the warning prints, and you merge it back by hand. Changes that leave the placeholders in place — a `Bash` edit, a formatter, an external editor — are kept in the file itself.
-- **File renaming leaves placeholders.** If the model renames or moves a file via a shell command, the new file will retain `BLOCK_<hash>` placeholders. The original code is saved as `<old-filename>.recovered` when the session stops. You must manually restore the recovered code into the new file.
+- **Edit cannot target a placeholder line.** Claude Code validates an Edit's `old_string` against the real file before any hook runs, so an `old_string` containing a placeholder fails with "string to replace not found". Nothing is changed. The note added to the Read result tells the model to choose an `old_string` without one, or to use Write with the whole file and every placeholder kept.
+- **Line numbers drift after a placeholder.** The view keeps the real start line, but each placeholder stands for several real lines, so later line numbers in the view are lower than the real ones. Read offsets are real line numbers.
+- **Only Read, Edit, and Write are covered.** A `Bash` command (`cat`, `sed`), a formatter, or another tool sees and changes the real file, protected blocks included. This is a convenience for `/code-simplify`, not a security boundary.
+- **Auto mode may re-check a rewritten call.** In auto mode, Claude Code can deny a call whose input a hook changed after the server reviewed it. A denied Write changes nothing; repeat it or switch mode.
+- **Single-line blocks hide the entire line.** If `simplify-ignore-start` and `simplify-ignore-end` appear on the same line as other code, the whole line is hidden. Use dedicated lines for annotations.
+- **Comment suffix detection covers `*/` and `-->` only.** Template engines with other closers (ERB `%>`, Blade `--}}`) may produce unbalanced placeholders. Use `#` or `//` style comments instead.
+- **Blocks cannot move between files.** A Write or Edit that carries another file's placeholder is denied, because the hook only knows the target file's blocks.
 
 ## Requirements
 
-- `jq`, `shasum` or `sha1sum` (auto-detected), Bash 3.2+
+- `bash` and `node` (any current LTS). Without `node` the hook does nothing: no block is hidden and no file is changed.

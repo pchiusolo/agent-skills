@@ -2,7 +2,7 @@
 
 Reference catalog of agent orchestration patterns this repo endorses, plus anti-patterns to avoid. Read this before adding a new slash command that coordinates multiple personas, or before introducing a new persona that "wraps" existing ones.
 
-The governing rule: **the user (or a slash command) is the orchestrator. Personas do not invoke other personas.** Skills are mandatory hops inside a persona's workflow.
+The governing rule: **the user (or a slash command) is the orchestrator, unless the owner has accepted an engagement contract that authorizes a Project Lead (Pattern 6). Personas do not invoke other personas** in either case. Skills are mandatory hops inside a persona's workflow.
 
 ---
 
@@ -89,7 +89,7 @@ user runs:  /spec  →  /plan  →  /build  →  /test  →  /review  →  /ship
 
 **Cost:** one sub-agent context per step. Free for the orchestration layer because there is no orchestrator agent.
 
-**Why not automate it:** an LLM "lifecycle orchestrator" would (a) lose nuance between steps because it has to summarize for hand-off, (b) skip the human checkpoints that catch wrong-direction work early, and (c) double the token cost via paraphrasing turns.
+**Why not automate it:** an LLM "lifecycle orchestrator" would (a) lose nuance between steps because it has to summarize for hand-off, (b) skip the human checkpoints that catch wrong-direction work early, and (c) double the token cost via paraphrasing turns. Pattern 6 is the only sanctioned automation of this sequence, and only under an owner-accepted contract that keeps those checkpoints as reserved decisions.
 
 ---
 
@@ -111,6 +111,37 @@ main agent → research sub-agent (reads 50 files) → digest → main agent con
 **Cost:** one isolated sub-agent context. Worth it any time the alternative is loading hundreds of files into the main context.
 
 **On Claude Code, use the built-in `Explore` subagent** rather than defining a custom research persona. `Explore` runs on Haiku, is denied write/edit tools, and is purpose-built for this pattern. Define a custom research subagent only when `Explore` doesn't fit (e.g. you need a domain-specific system prompt the model wouldn't infer).
+
+---
+
+### 6. Contract-authorized Project Lead (engagement only)
+
+One persistent Project Lead per project orchestrates bounded temporary workers and fresh-context reviewers, under an engagement contract the owner accepted and recorded in a durable engagement record. The contract, not the Lead's judgment, is its authority; see [autonomous-delivery-contract.md](autonomous-delivery-contract.md).
+
+```
+owner ─ accepts contract v1 ─→ durable record
+                                  ↑ events
+Project Lead ── routes (using-agent-skills, once per decision, recorded)
+   ├── admits → worker A (bounded task, own workspace)      ─┐
+   ├── admits → worker B                                     ├→ Lead reconciles at exact revisions
+   └── admits → fresh-context reviewer (exact base/head)    ─┘
+                                  ↓
+              reserved decisions (merge, deploy, data, destruction) → owner
+```
+
+**Use when:** the owner wants an outcome delivered across several lifecycle steps without stepping each one, and has written down scope, allowlists, limits, autonomous actions, reserved decisions, and stop conditions.
+
+**Rules:**
+- Every agent-creation request (including `/ship`'s fan-out, `/webperf`, test-writing helpers, and doubt-driven reviewers) goes through the Lead's admission: an owner for the task, a free slot under the contract's limits, an allowlisted provider and model. No slot → queue it.
+- Workers and reviewers do not create agents; they ask the Lead.
+- Hand-offs are durable artifacts (spec, plan, commits, the record), not paraphrased summaries.
+- Independent review means a fresh context at the exact revision. Same-context persona passes or self-questioning never count; when a fresh reviewer is unavailable, verification is blocked or incomplete.
+- Decisions the contract does not cover stay with the owner; the Lead records the question and blocks that line of work instead of inventing an answer.
+- Host permission gates and safety rules apply unchanged.
+
+**Anti-pattern shadow:** a "Lead" without an accepted contract is anti-pattern C; a Lead that inserts a routing-only persona is anti-pattern A; a worker that spawns its own helpers is anti-pattern D.
+
+**Cost:** one persistent Lead context plus one context per admitted actor. The admission limits bound it.
 
 ---
 
@@ -167,7 +198,7 @@ The fields that DO work in plugin agents are: `name`, `description`, `tools`, `d
 
 ### Spawning multiple subagents in parallel
 
-In Claude Code, parallel fan-out (Pattern 3) requires issuing **multiple Agent tool calls in a single assistant turn**. Sequential turns serialize execution. `/ship` calls this out explicitly. Any new orchestrator command should do the same.
+In Claude Code, parallel fan-out (Pattern 3) requires issuing **multiple Agent tool calls in a single assistant turn**. Sequential turns serialize execution. `/ship` calls this out explicitly. Any new orchestrator command should do the same. Under an engagement, each agent in the batch still needs its own admitted slot (Pattern 6); launch the admitted ones together and queue the rest.
 
 ---
 
@@ -323,7 +354,7 @@ An agent that calls `/spec`, then `/plan`, then `/build`, etc. on the user's beh
 - Doubles token cost: orchestrator turn + sub-agent turn for every step
 - Removes user agency at exactly the points where judgment matters most
 
-**What to do instead:** keep the user as the orchestrator. Document the recommended sequence in `README.md` and let users invoke it.
+**What to do instead:** keep the user as the orchestrator. Document the recommended sequence in `README.md` and let users invoke it. If the owner wants the sequence run for them, that is Pattern 6, which needs an accepted engagement contract and keeps the owner's checkpoints as reserved decisions.
 
 ---
 
@@ -336,7 +367,7 @@ An agent that calls `/spec`, then `/plan`, then `/build`, etc. on the user's beh
 - Debugging becomes a multi-level investigation
 - The leaf personas lose context to multiple summarization steps
 
-**What to do instead:** keep the orchestration depth at most 1 (slash command → personas). The merge happens in the main agent.
+**What to do instead:** keep the orchestration depth at most 1 (slash command → personas, or Project Lead → workers and reviewers). The merge happens in the main agent or the Lead.
 
 ---
 
@@ -355,6 +386,8 @@ Is the work one perspective on one artifact?
                            Validate against the checklist above.
                            If any check fails → fall back to single-persona command (Pattern 2).
 ```
+
+Under an accepted engagement the Project Lead walks the same flow, and every agent it would create goes through admission (Pattern 6).
 
 ---
 

@@ -30,6 +30,7 @@ Apply this skill when:
 - Pure information requests ("how does X work?", "what does this code do?")
 - Mechanical operations (renames, formats, file moves)
 - You already have ≥95% confidence; re-read the stop condition below before assuming you don't
+- Under an engagement whose durable record already holds a confirmed statement of intent for this work (see "Under an engagement" below)
 
 ## Loading Constraints
 
@@ -128,6 +129,14 @@ When the user confirms the statement of intent with an explicit "yes":
 1. **Deliver the confirmed Statement of Intent.**
 2. **Offer downstream paths** (offer to save it to `docs/intent/[topic].md`, draft a spec with `spec-driven-development`, or move to task planning after the spec).
 3. **STOP YOUR TURN IMMEDIATELY.** Do NOT invoke tools or start downstream work in this turn. Hand control back to the user to choose the next step.
+
+### Under an engagement
+
+When the work runs under an engagement (see `../../references/autonomous-delivery-contract.md`), the owner is the person whose intent you are surfacing, and the durable engagement record is where the conversation lives:
+
+- Read the record first. If the contract's outcome and acceptance clauses, or a recorded owner answer, already state the intent concretely, that is the confirmed statement of intent: use it and do not re-interview.
+- Ask only what the record does not answer, one question at a time with your best guess, as above, recorded for the owner. The work that depends on the answer blocks until the owner replies; never answer on the owner's behalf or treat silence as a yes.
+- The terminal-turn rule still applies: hand the confirmed intent back to the Project Lead instead of starting downstream work in the same turn, unless the contract authorizes the next phase.
 
 ### The 95% Confidence Stop
 
@@ -229,7 +238,7 @@ After applying interview-me:
 - [ ] Questions were asked one at a time, each with the agent's guess attached
 - [ ] At least one "what would you actually want if you didn't have to justify it?" probe ran when the user gave a sophistication-signaling or convention-signaling answer
 - [ ] A concrete restate (Outcome / User / Why now / Success / Constraint / Out of scope) was written back to the user
-- [ ] The user confirmed the restate with an explicit yes (not "whatever you think," not "sounds good," not silence)
+- [ ] The user confirmed the restate with an explicit yes (not "whatever you think," not "sounds good," not silence); under an engagement, the explicit yes is recorded or the record already states the intent
 - [ ] At the stop point, the agent could predict reactions to the next three questions it would ask
 - [ ] Upon receiving explicit confirmation, stopped the turn immediately without invoking tools or starting downstream work
 - [ ] Any handoff to a downstream skill (`idea-refine`, `spec-driven-development`) was framed in terms of the confirmed intent, not the original underspecified ask

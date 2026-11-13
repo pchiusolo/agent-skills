@@ -42,6 +42,12 @@ Task arrives
     └── Deploying/launching? ─────────→ shipping-and-launch
 ```
 
+## Invoking Skills on Each Host
+
+Invocation is host-specific. Name a skill by its `name` and use the mechanism the current host supports: the Skill tool in Claude Code (where a plugin may list it under a namespace such as `agent-skills:` or the namespace of a plugin that vendors this library), `@name` in Codex, the `skill` tool in OpenCode, or the host's own equivalent. Slash syntax such as `/spec` and `/build` belongs to the Claude Code, Gemini CLI, and Antigravity command wrappers; do not assume it exists on another host. Do not preload the whole library or paste this file into always-on context on a host that routes skills from their descriptions.
+
+**Under an engagement** (see `../../references/autonomous-delivery-contract.md`), the Project Lead invokes this skill once per routing decision through the host's supported mechanism, records the route it chose (the skills, in order, and why) in the engagement record, and loads only the skills on that route. Workers receive their route in their brief instead of re-routing.
+
 ## Core Operating Behaviors
 
 These behaviors apply at all times, across all skills. They are non-negotiable.
@@ -68,6 +74,8 @@ When you encounter inconsistencies, conflicting requirements, or unclear specifi
 2. Name the specific confusion.
 3. Present the tradeoff or ask the clarifying question.
 4. Wait for resolution before continuing.
+
+Under an engagement (see `../../references/autonomous-delivery-contract.md`), check the durable engagement record before asking: a conflict the contract or a recorded owner answer already resolves is not re-asked. One that only the owner can resolve is recorded for the owner and blocks that line of work; the waiting happens there, and you never pick an answer on the owner's behalf.
 
 **Bad:** Silently picking one interpretation and hoping it's right.
 **Good:** "I see X in the spec but Y in the existing code. Which takes precedence?"
@@ -137,6 +145,8 @@ These are the subtle errors that look like productivity but create problems:
 3. **Multiple skills can apply.** A feature implementation might involve `idea-refine` → `spec-driven-development` → `planning-and-task-breakdown` → `incremental-implementation` → `test-driven-development` → `code-review-and-quality` → `code-simplification` → `shipping-and-launch` in sequence.
 
 4. **When in doubt, start with a spec.** If the task is non-trivial and there's no spec, begin with `spec-driven-development`.
+
+5. **Under an engagement, "ask" means "check the record, then record and block."** Wherever a skill says to ask the user, wait for approval, or stop and ask, check the durable engagement record first (see `../../references/autonomous-delivery-contract.md`): proceed when the contract or a recorded owner answer covers the decision, citing it; otherwise record the question for the owner and block that line of work. Never invent the answer, and never treat this as permission to skip a safety check, a quality gate, or a host permission prompt. Without an engagement, ask as the skill says.
 
 ## Lifecycle Sequence
 

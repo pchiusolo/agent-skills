@@ -8,6 +8,10 @@ Cross-session citation cache for [`source-driven-development`](../skills/source-
 
 This hook caches fetched content on disk, but **revalidates with the origin server on every reuse** via HTTP `If-None-Match` / `If-Modified-Since`. Content is only served from cache when the server responds `304 Not Modified`, which is a fresh verification — not a memory read.
 
+## Opt-in only
+
+This hook is not registered by the plugin and is never installed automatically: you add it to your own settings. It writes only to its scoped cache, `.claude/sdd-cache/` under the project. Under an autonomous engagement ([references/autonomous-delivery-contract.md](../references/autonomous-delivery-contract.md)) it stays off unless the contract enables it.
+
 ## Setup
 
 1. Add hooks to `.claude/settings.json` (or `.claude/settings.local.json` for personal use):

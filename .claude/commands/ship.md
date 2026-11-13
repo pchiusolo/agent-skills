@@ -3,9 +3,11 @@ description: Run the pre-launch checklist via parallel fan-out to specialist per
 disable-model-invocation: true
 ---
 
-Invoke the agent-skills:shipping-and-launch skill.
+Invoke the `shipping-and-launch` skill.
 
 `/ship` is a **fan-out orchestrator**. It runs three specialist personas in parallel against the current change, then merges their reports into a single go/no-go decision with a rollback plan. The personas operate independently — no shared state, no ordering — which is what makes parallel execution safe and useful here.
+
+**Under an engagement** (see `references/autonomous-delivery-contract.md`), each Phase A agent is an agent-creation request: get the Project Lead's admission (a task owner and a free slot under the contract's limits) before spawning, launch the admitted ones together, and queue the rest until slots free. Each persona still runs in its own fresh context at the exact revision under review. Without an engagement, run Phase A exactly as below.
 
 ## Phase A — Parallel fan-out
 
@@ -17,7 +19,7 @@ In Claude Code, each call passes `subagent_type` matching the persona's `name` f
 2. **`security-auditor`** — Run a vulnerability and threat-model pass. Check OWASP Top 10, secrets handling, auth/authz, dependency CVEs. Output the standard audit report.
 3. **`test-engineer`** — Analyze test coverage for the change. Identify gaps in happy path, edge cases, error paths, and concurrency scenarios. Output the standard coverage analysis.
 
-In other harnesses without an Agent tool, invoke each persona's system prompt sequentially and treat their outputs as if returned in parallel — the merge phase still works.
+In other harnesses without an Agent tool, you can run each persona's system prompt sequentially in this context for its checklist coverage, but a same-context pass is **not independent review**: it shares this session's context and reasoning. Label each such report "same-context pass, not independent", and either get a fresh-context review (a new session per persona, given only the change and its contract) or treat independent review as incomplete in Phase C.
 
 Constraints (from Claude Code's subagent model):
 - Subagents cannot spawn other subagents — do not let one persona delegate to another.
@@ -58,6 +60,9 @@ Produce a single output:
 - Rollback procedure: [exact steps]
 - Recovery time objective: [target]
 
+### Review independence
+- [Fresh-context reports received, or "independent review incomplete: <persona> missing or same-context only"]
+
 ### Specialist reports (full)
 - [code-reviewer report]
 - [security-auditor report]
@@ -66,8 +71,10 @@ Produce a single output:
 
 ## Rules
 
-1. The three Phase A personas run in parallel — never sequentially.
+1. The three Phase A personas run in parallel, each in a fresh context. A sequential same-context pass may add checklist coverage, but it is never presented or counted as independent review. Under an engagement, admitted personas run together and queued ones run as slots free, still in fresh contexts.
 2. Personas do not call each other. The main agent merges in Phase B.
 3. The rollback plan is mandatory before any GO decision.
-4. If any persona returns a Critical finding, the default verdict is NO-GO unless the user explicitly accepts the risk.
-5. **Skip the fan-out only if all of the following are true:** the change touches 2 files or fewer, the diff is under 50 lines, and it does not touch auth, payments, data access, or config/env. Otherwise, default to fan-out. `/ship` is designed for production-bound changes — when the blast radius is non-trivial, run the parallel review even if the diff looks small.
+4. If any persona returns a Critical finding, the default verdict is NO-GO unless the user explicitly accepts the risk (under an engagement, only the owner can, as a recorded decision).
+5. **Skip the fan-out only if all of the following are true:** the change touches 2 files or fewer, the diff is under 50 lines, and it does not touch auth, payments, data access, or config/env. Otherwise, default to fan-out. `/ship` is designed for production-bound changes — when the blast radius is non-trivial, run the parallel review even if the diff looks small. A skipped fan-out means no independent review ran; say so in the decision. Under an engagement this skip does not apply, because the contract's completion evidence requires a fresh-context review at the final revision.
+6. Same-context passes never count as independent review. When the fan-out was required and any fresh-context report is missing, the verdict is `NO-GO: independent review incomplete` unless the user explicitly accepts the gap as an acknowledged risk. Under an engagement the gap is recorded as blocked verification; the Lead does not accept it on the owner's behalf.
+7. GO is a recommendation, not a deploy. Deploying stays the user's call; under an engagement it is a reserved owner decision unless the contract authorizes it.

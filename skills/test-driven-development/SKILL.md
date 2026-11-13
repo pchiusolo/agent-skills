@@ -358,6 +358,8 @@ then verifies the test passes.
 
 This separation ensures the test is written without knowledge of the fix, making it more robust.
 
+Under an engagement (see `../../references/autonomous-delivery-contract.md`), spawning that subagent is an agent-creation request: get the Project Lead's admission first, and queue it when no slot is free rather than spawning ad hoc.
+
 ## See Also
 
 For JavaScript/TypeScript testing patterns illustrating these principles — Jest, React Testing Library, Supertest, Playwright — see `../../references/testing-patterns.md`. The principles transfer to any ecosystem; the syntax and tools there are JS/TS-specific.

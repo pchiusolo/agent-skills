@@ -23,6 +23,8 @@ Write a structured specification before writing any code. The spec is the shared
 
 Spec-driven development has four phases, preceded by a scope check (Phase 0) that activates only when one request bundles several independently testable capabilities. Do not advance to the next phase until the current one is validated.
 
+**Under an engagement** (see `../../references/autonomous-delivery-contract.md`), every gate is still a gate, but the durable engagement record is checked first. A gate passes on a recorded owner approval or on a contract clause that pre-approves that phase's output (cite it). Clarifying questions go to the record first: do not re-ask what the contract or a recorded owner answer settles. A question only the owner can answer is recorded and blocks that line of work; never invent the answer. Without an engagement, the human reviews each gate as shown.
+
 ```
 SPECIFY ──→ PLAN ──→ TASKS ──→ IMPLEMENT
    │          │        │          │
@@ -62,7 +64,7 @@ Build order: identity → billing, notifications → reporting
 
 **The map is gated like every phase.** The human reviews module boundaries, dependency direction, and build order before any module spec is written. Getting the map wrong is expensive; reviewing ten lines is not.
 
-**Then recurse per module.** Run Specify → Plan → Tasks → Implement for each module in dependency order. Each module gets its own spec, scoped to that module's objective, boundaries, and success criteria. Save the approved map at the project root and each module's spec alongside it, named by module id (`SPEC-identity.md`, `SPEC-billing.md`) — the map, not filename guessing, is the index of what exists.
+**Then recurse per module.** Run Specify → Plan → Tasks → Implement for each module in dependency order. Each module gets its own spec, scoped to that module's objective, boundaries, and success criteria. Save the approved map at the project root as `CAPABILITY-MAP.md` and each module's spec alongside it as `SPEC-<module-id>.md` (`SPEC-identity.md`, `SPEC-billing.md`) — the map, not filename guessing, is the index of what exists, and `/build` resolves a module's spec through it. Under an engagement, use the locations the engagement names instead.
 
 ### Phase 1: Specify
 
@@ -172,6 +174,7 @@ This lets you loop, retry, and problem-solve toward a clear goal rather than gue
 1. Summarize it and list any Open Questions.
 2. Ask the human to approve it or request changes.
 3. **STOP YOUR TURN IMMEDIATELY.** Do NOT start Phase 2, invoke `planning-and-task-breakdown`, or write code in this turn. Planning starts only after the human approves the spec in a later turn.
+4. **Under an engagement,** the hand-off goes to the durable record instead of the turn: continue to Phase 2 only when a recorded owner approval or a contract clause already approves this spec; otherwise record the spec and its Open Questions for the owner and stop this line of work.
 
 ### Phase 2: Plan
 
@@ -185,7 +188,7 @@ With the validated spec, generate a technical implementation plan:
 
 > Follow `planning-and-task-breakdown` for the dependency-graph mapping and vertical-slicing mechanics behind these steps; it is the canonical source. The bullets above are a lightweight summary; if they ever diverge, `planning-and-task-breakdown` takes precedence.
 >
-> **Output convention:** Save the plan to `tasks/plan.md` and record the task list in the task list target defined by `planning-and-task-breakdown` (default `tasks/todo.md`; projects may designate an external tracker instead). Create `tasks/` if it does not exist. Downstream commands (`/build`, etc.) expect these defaults.
+> **Output convention:** Save the plan to `tasks/plan.md` and record the task list in the task list target defined by `planning-and-task-breakdown` (default `tasks/todo.md`; projects may designate an external tracker instead). Create `tasks/` if it does not exist. Downstream commands (`/build`, etc.) expect these defaults when no engagement reference or module map applies; under an engagement, the plan and task references it names win.
 
 The plan should be reviewable: the human should be able to read it and say "yes, that's the right approach" or "no, change X."
 
@@ -250,10 +253,10 @@ The spec is a living document, not a one-time artifact:
 Before proceeding to implementation, confirm:
 
 - [ ] The spec covers all six core areas
-- [ ] The human has reviewed and approved the spec
-- [ ] The turn ended after saving the spec; approval came in a later turn
+- [ ] The human has reviewed and approved the spec (under an engagement: a recorded owner approval or a cited contract clause)
+- [ ] The turn ended after saving the spec; approval came in a later turn (under an engagement: or the approval above was already recorded)
 - [ ] Success criteria are specific and testable
 - [ ] Boundaries (Always/Ask First/Never) are defined
 - [ ] The spec is saved to a file in the repository
 - [ ] If the request bundles several independently testable capabilities, a capability map (module ids, dependency direction, build order) was approved before any module spec was written
-- [ ] Every module spec traces to a module id in the approved map
+- [ ] Every module spec traces to a module id in the approved map, saved as `CAPABILITY-MAP.md` and `SPEC-<module-id>.md` unless an engagement names other locations

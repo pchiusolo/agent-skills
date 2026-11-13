@@ -75,13 +75,13 @@ This repo has three composable layers. They have different jobs and should not b
 - **Personas** (`agents/<role>.md`) — roles with a perspective and an output format. The *who*.
 - **Slash commands** (`.claude/commands/*.md`) — user-facing entry points. The *when*. The orchestration layer.
 
-Composition rule: **the user (or a slash command) is the orchestrator. Personas do not invoke other personas.** A persona may invoke skills.
+Composition rule: **the user, a slash command the user runs, or an explicitly authorized Project Lead is the orchestrator. Personas do not invoke other personas.** A persona may invoke skills. A Project Lead's only authority is an engagement contract the owner accepted and that is recorded in a durable engagement record; without one, the user (or a slash command) is the only orchestrator and every skill behaves exactly as written. See [references/autonomous-delivery-contract.md](references/autonomous-delivery-contract.md) for what a contract contains, how a skill detects an engagement, and what stays gated.
 
-The only multi-persona orchestration pattern this repo endorses is **parallel fan-out with a merge step** — used by `/ship` to run `code-reviewer`, `security-auditor`, and `test-engineer` concurrently and synthesize their reports. Do not build a "router" persona that decides which other persona to call; that's the job of slash commands and intent mapping.
+Two multi-persona patterns are endorsed: **parallel fan-out with a merge step** — used by `/ship` to run `code-reviewer`, `security-auditor`, and `test-engineer` concurrently and synthesize their reports — and, under an engagement only, **Lead-admitted dispatch**, where the Project Lead admits bounded workers and fresh-context reviewers against the contract's ownership and capacity limits. Specialist personas stay non-delegating in both. Do not build a "router" persona that decides which other persona to call; that's the job of slash commands, intent mapping, or a Project Lead's recorded routing decision.
 
 See [docs/agents.md](docs/agents.md) for the decision matrix and [references/orchestration-patterns.md](references/orchestration-patterns.md) for the full pattern catalog.
 
-**Claude Code interop:** the personas in `agents/` work as Claude Code subagents (auto-discovered from this plugin's `agents/` directory) and as Agent Teams teammates (referenced by name when spawning). Two platform constraints align with our rules: subagents cannot spawn other subagents, and teams cannot nest. Plugin agents silently ignore the `hooks`, `mcpServers`, and `permissionMode` frontmatter fields.
+**Claude Code interop:** the personas in `agents/` work as Claude Code subagents (auto-discovered from this plugin's `agents/` directory) and as Agent Teams teammates (referenced by name when spawning). Two platform constraints align with our rules: subagents cannot spawn other subagents, and teams cannot nest. Skill invocation syntax is host-specific: `/name` and `agent-skills:<name>` are Claude Code forms, so on other hosts use that host's skill mechanism by skill name. Plugin agents silently ignore the `hooks`, `mcpServers`, and `permissionMode` frontmatter fields.
 
 ## Creating a New Skill
 

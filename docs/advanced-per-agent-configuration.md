@@ -31,6 +31,8 @@ Claude Code reads `name` and `description` for discovery. Custom commands and sk
 
 These are Claude Code conventions. Keep the shared, published `SKILL.md` limited to spec fields; apply these runtime controls in your own local command or skill copies instead.
 
+Invoking a skill is host-specific too. In Claude Code a plugin's skills are listed under its namespace (`agent-skills:<name>` for this plugin, a different prefix when another plugin vendors the library), so wrappers and skills in this repo refer to skills by bare name and let the host resolve them. Under an engagement, the Project Lead's model, provider, and concurrency settings come from the contract's allowlist and limits ([references/autonomous-delivery-contract.md](../references/autonomous-delivery-contract.md)), not from per-skill frontmatter.
+
 ## Gemini CLI and Antigravity
 
 Gemini CLI and Antigravity discover skills the same way: they match `name` and `description`, then load the full skill on demand. Runtime orchestration lives in a separate resource, not in the skill frontmatter.

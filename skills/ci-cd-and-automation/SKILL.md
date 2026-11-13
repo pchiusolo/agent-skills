@@ -307,7 +307,7 @@ Designate someone responsible for keeping CI green. When the build breaks, the B
 - **Required reviews:** At least 1 approval before merge
 - **Required status checks:** CI must pass before merge
 - **Branch protection:** No force-pushes to main
-- **Auto-merge:** If all checks pass and approved, merge automatically
+- **Auto-merge:** If all checks pass and approved, merge automatically (under an autonomous engagement, enabling auto-merge is itself the owner's reserved merge decision unless the contract authorizes it; see `../../references/autonomous-delivery-contract.md`)
 
 ## CI Optimization
 

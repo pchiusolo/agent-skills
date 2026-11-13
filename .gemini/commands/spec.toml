@@ -3,6 +3,8 @@ description = "Start spec-driven development — write a structured specificatio
 prompt = """
 Invoke the spec-driven-development skill.
 
+Under an engagement (see `references/autonomous-delivery-contract.md`), read the durable engagement record before asking anything: do not re-ask what the contract or a recorded owner answer already settles, and write to the spec location the engagement names. A question only the owner can answer still blocks: record it and stop that line of work, never inventing an answer. Without an engagement, proceed as below.
+
 Begin by understanding what the user wants to build. Ask clarifying questions about:
 1. The objective and target users
 2. Core features and acceptance criteria
@@ -13,5 +15,5 @@ Then generate a structured spec covering all six core areas: objective, commands
 
 If the request bundles several independently testable capabilities, first propose a capability map (module ids, dependency direction, build order) per the skill's Phase 0 and get it approved, then spec each module in dependency order.
 
-Save the spec as SPEC.md in the project root and confirm with the user before proceeding.
+Save the spec as SPEC.md in the project root, or, after a capability map, save the map as `CAPABILITY-MAP.md` and each module spec as `SPEC-<module-id>.md` (unless an engagement names other locations). Then confirm with the user before proceeding; under an engagement, continue only if a recorded owner approval or a contract clause already approves this spec, otherwise record it for the owner and stop.
 """

@@ -24,7 +24,7 @@ codex plugin add agent-skills@agent-skills
 
 After install, invoke a skill in Codex chat with `@` (e.g. `@spec-driven-development`) or just describe the task and let Codex pick the right skill. All 25 skills under `skills/` are available.
 
-[Codex uses progressive disclosure](https://developers.openai.com/codex/skills): it starts with each skill's `name` and `description`, chooses skills on demand, then loads the full `SKILL.md` only when selected. Do not also paste `using-agent-skills/SKILL.md` into `AGENTS.md`, a system prompt, or other always-on context: that stacks the pack's meta-router on Codex's native router and adds unnecessary routing work. The meta-skill can remain installed with the pack; the warning is specifically against preloading its full instructions.
+[Codex uses progressive disclosure](https://developers.openai.com/codex/skills): it starts with each skill's `name` and `description`, chooses skills on demand, then loads the full `SKILL.md` only when selected. Do not also paste `using-agent-skills/SKILL.md` into `AGENTS.md`, a system prompt, or other always-on context: that stacks the pack's meta-router on Codex's native router and adds unnecessary routing work. The meta-skill can remain installed with the pack; the warning is specifically against preloading its full instructions. An orchestrating Project Lead under an engagement contract ([references/autonomous-delivery-contract.md](../references/autonomous-delivery-contract.md)) invokes it with `@using-agent-skills` once per routing decision and records the route.
 
 ## How it works
 
@@ -32,4 +32,4 @@ After install, invoke a skill in Codex chat with `@` (e.g. `@spec-driven-develop
 - `.agents/plugins/marketplace.json` — marketplace entry declaring the repo root (`./`) as the plugin source.
 - `skills/<name>/SKILL.md` — unchanged. Codex and Claude Code share the same `name` + `description` frontmatter format, so one file serves both platforms.
 
-Slash commands in `.claude/commands/` and personas in `agents/` stay Claude Code-specific. The `SessionStart` script under `hooks/` is a standalone helper for hosts without native skill routing and is not wired by either plugin. On Codex, invoke the underlying skill directly instead of the slash command (e.g. `@spec-driven-development` instead of `/spec`).
+Slash commands in `.claude/commands/` and personas in `agents/` stay Claude Code-specific. The `SessionStart` script under `hooks/` is a standalone helper for hosts without native skill routing and is not wired by either plugin. On Codex, invoke the underlying skill directly instead of the slash command (e.g. `@spec-driven-development` instead of `/spec`). Slash syntax does not carry across hosts; the skill name does.

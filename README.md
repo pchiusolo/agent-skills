@@ -2,6 +2,8 @@
 
 **Production-grade engineering skills for AI coding agents.**
 
+> **Fork notice.** This is the [`pchiusolo/agent-skills`](https://github.com/pchiusolo/agent-skills) fork of [`addyosmani/agent-skills`](https://github.com/addyosmani/agent-skills) by Addy Osmani (MIT). It adds conditional support for an explicitly authorized Project Lead working under an owner-accepted engagement contract ([references/autonomous-delivery-contract.md](references/autonomous-delivery-contract.md)); without an engagement every skill behaves as upstream. Its Claude Code marketplace is `pchiusolo-agent-skills`. Install commands below that name `addyosmani/agent-skills` install upstream; replace the repository with `pchiusolo/agent-skills` to install this fork.
+
 Skills encode the workflows, quality gates, and best practices that senior engineers use when building software. These ones are packaged so AI agents follow them consistently across every phase of development.
 
 <a href="https://trendshift.io/repositories/25200" target="_blank"><img src="https://trendshift.io/api/badge/repositories/25200" alt="addyosmani%2Fagent-skills | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
@@ -35,7 +37,7 @@ Skills encode the workflows, quality gates, and best practices that senior engin
 | Simplify the code | `/code-simplify` | Clarity over cleverness |
 | Ship to production | `/ship` | Faster is safer |
 
-In Claude Code these install as plugin commands. Where a built-in command has the same name, as `/review` does, use the namespaced form: `/agent-skills:review`.
+In Claude Code these install as plugin commands. Where a built-in command has the same name, as `/review` does, use the namespaced form: `/agent-skills:review`. Slash syntax and the `agent-skills:` namespace are Claude Code forms; other hosts invoke the same skills by name through their own mechanism (see each host's setup guide).
 
 Want fewer manual steps once the spec exists? **`/build auto`** generates the plan and implements every task in a single approved pass — you approve the plan once, then it runs autonomously. It removes the human stepping *between* tasks, not the verification: every task is still test-driven and committed individually, and it pauses on failures or risky steps.
 
@@ -75,14 +77,16 @@ Prefer a native integration? Pick your tool below.
 **Marketplace install:**
 
 ```
-/plugin marketplace add addyosmani/agent-skills
-/plugin install agent-skills@addy-agent-skills
+/plugin marketplace add pchiusolo/agent-skills
+/plugin install agent-skills@pchiusolo-agent-skills
 ```
+
+The upstream marketplace is `/plugin marketplace add addyosmani/agent-skills` then `/plugin install agent-skills@addy-agent-skills`. Install one of the two, not both: they ship skills with the same names.
 
 > **SSH errors?** The marketplace clones repos via SSH. If you don't have SSH keys set up on GitHub, either [add your SSH key](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a-new-ssh-key-to-your-github-account) or use the full HTTPS URL to force HTTPS cloning during the marketplace-add step:
 > ```bash
-> /plugin marketplace add https://github.com/addyosmani/agent-skills.git
-> /plugin install agent-skills@addy-agent-skills
+> /plugin marketplace add https://github.com/pchiusolo/agent-skills.git
+> /plugin install agent-skills@pchiusolo-agent-skills
 > ```
 >
 > If `/plugin install` still fails with `git@github.com: Permission denied (publickey)` on Windows or macOS, the recommended workaround is to configure Git once to rewrite GitHub SSH URLs to HTTPS for subprocess clones:
@@ -93,7 +97,7 @@ Prefer a native integration? Pick your tool below.
 **Local / development:**
 
 ```bash
-git clone https://github.com/addyosmani/agent-skills.git
+git clone https://github.com/pchiusolo/agent-skills.git
 claude --plugin-dir /path/to/agent-skills
 ```
 
@@ -298,7 +302,7 @@ Pre-configured specialist personas for targeted reviews:
 | [security-auditor](agents/security-auditor.md) | Security Engineer | Vulnerability detection, threat modeling, OWASP assessment |
 | [web-performance-auditor](agents/web-performance-auditor.md) | Web Performance Engineer | Core Web Vitals audit with Quick/Deep modes and a metric-honesty rule; run it via `/webperf` |
 
-See [docs/agents.md](docs/agents.md) for the decision matrix, orchestration rules, and how personas compose with skills and slash commands.
+See [docs/agents.md](docs/agents.md) for the decision matrix, orchestration rules, and how personas compose with skills and slash commands. The user or a slash command orchestrates them; under an owner-accepted engagement contract, a Project Lead may also dispatch them as fresh-context reviewers.
 
 ---
 
@@ -315,6 +319,7 @@ Quick-reference material that skills pull in when needed:
 | [accessibility-checklist.md](references/accessibility-checklist.md) | Keyboard nav, screen readers, visual design, ARIA, testing tools |
 | [observability-checklist.md](references/observability-checklist.md) | On-call questions, structured logging, RED/USE metrics, tracing, symptom-based alerting, pre-launch gate |
 | [orchestration-patterns.md](references/orchestration-patterns.md) | Endorsed multi-persona orchestration patterns, anti-patterns, and the "personas don't invoke personas" rule |
+| [autonomous-delivery-contract.md](references/autonomous-delivery-contract.md) | What a Project Lead engagement contract contains, how skills detect an engagement, and what stays gated |
 
 ---
 
@@ -356,7 +361,7 @@ The portable core stays in shared directories. Host-specific paths are native di
 | Layer / consumer | Repository paths | Purpose |
 |---|---|---|
 | Shared workflow core | `skills/` (25 skills) | Portable `SKILL.md` workflows used by every integration |
-| Shared review material | `agents/` (4 personas), `references/` (7 checklists) | Specialist reviewers and pack-level checklists carried by whole-repo installs |
+| Shared review material | `agents/` (4 personas), `references/` (8 references) | Specialist reviewers and pack-level checklists carried by whole-repo installs |
 | Claude Code adapter | `.claude/commands/` (9 commands), `.claude-plugin/`, `hooks/` | Slash-command wrappers, marketplace metadata, and lifecycle hooks |
 | Gemini CLI adapter | `.gemini/commands/` (9 commands) | Gemini-native TOML command wrappers |
 | Antigravity CLI adapter | `commands/` (9 commands), `plugin.json` | Legacy TOML wrappers and the root plugin manifest; see the [known wrapper limitation](docs/antigravity-setup.md#lifecycle-workflows-and-command-compatibility) |

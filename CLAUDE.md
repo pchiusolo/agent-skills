@@ -8,10 +8,10 @@ This is the agent-skills project — a collection of production-grade engineerin
 
 ```
 skills/       → Core skills (SKILL.md per directory)
-agents/       → Reusable agent personas (code-reviewer, test-engineer, security-auditor, web-performance-auditor)
+agents/       → Reusable agent personas (code-reviewer, test-engineer, security-auditor, web-performance-auditor); single-perspective, never delegating
 hooks/        → Session lifecycle hooks
 .claude/commands/ → Slash commands (/spec, /plan, /build, /test, /review, /code-simplify, /ship; plus /webperf specialist audit)
-references/   → Supplementary checklists (testing, performance, security, accessibility, observability)
+references/   → Supplementary checklists (testing, performance, security, accessibility, observability) plus orchestration patterns and the autonomous-delivery contract
 evals/        → Skill eval cases + framework (see evals/README.md)
 docs/         → Setup guides for different tools
 ```
@@ -24,6 +24,10 @@ docs/         → Setup guides for different tools
 **Verify:** browser-testing-with-devtools, debugging-and-error-recovery
 **Review:** code-review-and-quality, code-simplification, security-and-hardening, performance-optimization
 **Ship:** git-workflow-and-versioning, ci-cd-and-automation, deprecation-and-migration, documentation-and-adrs, observability-and-instrumentation, shipping-and-launch
+
+## Orchestration
+
+The user, or a slash command the user runs, orchestrates. An explicitly authorized Project Lead may orchestrate only under an owner-accepted engagement contract recorded in a durable engagement record; see [references/autonomous-delivery-contract.md](references/autonomous-delivery-contract.md). Without one, every skill keeps its own approval stops. Personas never invoke other personas, and there is no router persona.
 
 ## Conventions
 
